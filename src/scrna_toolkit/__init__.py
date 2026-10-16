@@ -10,6 +10,16 @@ except PackageNotFoundError:  # running from a source tree without installation
 
 from scrna_toolkit.io import detect_format, load_samples, load_scrna
 from scrna_toolkit.metadata import harmonise_obs, merge_sample_metadata, validate_metadata
+from scrna_toolkit.plotting import (
+    plot_cell_type_composition,
+    plot_cells_per_group,
+    plot_cells_per_patient,
+    plot_cells_per_sample,
+    plot_composition_heatmap,
+    plot_qc_distributions,
+    plot_qc_scatter,
+    plot_umap,
+)
 from scrna_toolkit.preprocessing import (
     log1p,
     normalize_total,
@@ -43,6 +53,14 @@ __all__ = [
     "log1p",
     "merge_sample_metadata",
     "normalize_total",
+    "plot_cell_type_composition",
+    "plot_cells_per_group",
+    "plot_cells_per_patient",
+    "plot_cells_per_sample",
+    "plot_composition_heatmap",
+    "plot_qc_distributions",
+    "plot_qc_scatter",
+    "plot_umap",
     "preprocess",
     "record_step",
     "run_leiden",
