@@ -7,6 +7,7 @@ import logging
 import scanpy as sc
 from anndata import AnnData
 
+from scrna_toolkit.counts import ensure_raw_counts
 from scrna_toolkit.provenance import get_representation, record_step
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ def select_hvgs(
     batch_key: str | None = None,
     layer: str | None = None,
     subset: bool = False,
+    allow_non_integer: bool = False,
 ) -> AnnData:
     """Flag highly variable genes in ``var["highly_variable"]`` (genes are kept by default).
 
@@ -34,6 +36,8 @@ def select_hvgs(
         if "counts" not in adata.layers:
             raise ValueError(f"flavor={flavor!r} needs raw counts; run store_counts() first")
         layer = "counts"
+    if flavor in _COUNT_FLAVORS:
+        ensure_raw_counts(adata, layer, allow_non_integer=allow_non_integer)
     if flavor not in _COUNT_FLAVORS and layer is None and get_representation(adata) != "log1p":
         logger.warning("flavor=%r expects log-normalized X", flavor)
 

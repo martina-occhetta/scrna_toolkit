@@ -8,6 +8,7 @@ try:
 except PackageNotFoundError:  # running from a source tree without installation
     __version__ = "0.0.0+unknown"
 
+from scrna_toolkit.counts import ensure_raw_counts
 from scrna_toolkit.datasets import (
     DatasetAdapter,
     GEODataset,
@@ -68,6 +69,7 @@ __all__ = [
     "calculate_qc_metrics",
     "detect_format",
     "download_geo_processed_files",
+    "ensure_raw_counts",
     "filter_cells",
     "filter_genes",
     "get_config",

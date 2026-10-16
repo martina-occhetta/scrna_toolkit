@@ -24,6 +24,7 @@ class QCConfig:
     mitochondrial_prefix: str = "MT-"
     ribosomal_prefixes: list[str] | None = None
     hemoglobin_regex: str | None = None
+    allow_non_integer_counts: bool = False
 
 
 @dataclass
@@ -41,6 +42,7 @@ class PreprocessingConfig:
     run_umap: bool = True
     run_leiden: bool = True
     seed: int = 0
+    allow_non_integer_counts: bool = False
 
 
 # MetadataConfig field -> canonical obs column it maps onto.

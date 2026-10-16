@@ -19,40 +19,50 @@ from typing import Any
 import scanpy as sc
 from anndata import AnnData
 
-from scrna_toolkit._utils import looks_like_counts
+from scrna_toolkit.counts import ensure_raw_counts
 from scrna_toolkit.provenance import get_representation, record_step, set_representation
 
 logger = logging.getLogger(__name__)
 
 
-def store_counts(adata: AnnData, layer: str = "counts", *, overwrite: bool = False) -> AnnData:
+def store_counts(
+    adata: AnnData,
+    layer: str = "counts",
+    *,
+    overwrite: bool = False,
+    allow_non_integer: bool = False,
+) -> AnnData:
     """Copy raw counts from ``X`` into ``adata.layers[layer]`` (once) before normalization.
 
     One copy of the matrix is unavoidable because normalization rewrites ``X``. If the layer
-    already exists it is kept as is (no second copy) unless ``overwrite=True``.
+    already exists it is kept (no second copy) unless ``overwrite=True``. Either way the stored
+    layer is verified with :func:`ensure_raw_counts`.
     """
     if layer in adata.layers and not overwrite:
+        ensure_raw_counts(adata, layer, allow_non_integer=allow_non_integer)
         logger.info("layers[%r] already exists; keeping it", layer)
         return adata
-    representation = get_representation(adata)
-    if representation not in (None, "counts"):
-        raise ValueError(f"adata.X holds {representation!r} values, not counts")
+    ensure_raw_counts(adata, allow_non_integer=allow_non_integer)
     X: Any = adata.X
-    if not looks_like_counts(X):
-        logger.warning("adata.X is not integer-valued; storing it as %r anyway", layer)
     adata.layers[layer] = X.copy()
     set_representation(adata, "counts")
     record_step(adata, "store_counts", {"layer": layer})
     return adata
 
 
-def normalize_total(adata: AnnData, target_sum: float | None = 1e4) -> AnnData:
-    """Scale each cell to ``target_sum`` total counts (in place on ``X``)."""
+def normalize_total(
+    adata: AnnData, target_sum: float | None = 1e4, *, allow_non_integer: bool = False
+) -> AnnData:
+    """Scale each cell to ``target_sum`` total counts (in place on ``X``).
+
+    ``X`` must hold raw counts. It is scanned with :func:`ensure_raw_counts` unless it is
+    already tracked as counts (e.g. by :func:`store_counts`).
+    """
     representation = get_representation(adata)
     if representation not in (None, "counts"):
         raise ValueError(f"adata.X already holds {representation!r} values; refusing to normalize")
-    if representation is None and not looks_like_counts(adata.X):
-        logger.warning("normalize_total expects counts but adata.X is not integer-valued")
+    if representation is None:
+        ensure_raw_counts(adata, allow_non_integer=allow_non_integer)
     sc.pp.normalize_total(adata, target_sum=target_sum)
     set_representation(adata, "normalized")
     logger.info("normalize_total: X counts -> normalized (target_sum=%s)", target_sum)
