@@ -69,6 +69,25 @@ report = sct.validate_metadata(adata)  # DataFrame of issues; never raises
 samples that map to several patients (or other sample-level fields), and near-duplicate labels
 such as `"T cell"` vs `"t_cell"`.
 
+## Quality control
+
+```python
+sct.calculate_qc_metrics(adata, mitochondrial_prefix="MT-")  # adds obs columns, never filters
+adata, summary = sct.filter_cells(
+    adata, min_genes=200, max_pct_mt=20, return_summary=True
+)  # returns a filtered copy unless inplace=True
+adata = sct.filter_genes(adata, min_cells=3)
+```
+
+`pct_counts_mt` is a percentage (0-100). Use `mitochondrial_prefix="mt-"` for mouse,
+`mitochondrial_genes=[...]` for an explicit list, and `gene_symbol_col=` when `var_names` are
+Ensembl IDs. Ribosomal (`ribosomal_prefixes=("RPS", "RPL")`) and haemoglobin
+(`hemoglobin_regex=r"^HB[^(P)]"`) fractions are opt-in.
+
+**QC thresholds are biological and dataset-specific.** Filter functions do nothing unless you
+pass thresholds; the values above are illustrations, not recommendations. Always inspect the QC
+distributions for your tissue, chemistry and sequencing depth before choosing them.
+
 ## Development
 
 ```bash
