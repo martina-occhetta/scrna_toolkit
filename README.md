@@ -265,6 +265,24 @@ values always fail.
 Scaling densifies data, so `run_pca(scale=True)` scales only a temporary dense copy of the HVG
 columns and leaves `X` unchanged. A warning is logged when a dense block above ~0.8 GB is created.
 
+### Guarding against accidental densification
+
+The warning above only covers densification done by this package. On large objects, an opt-in
+guard makes any `.toarray()`/`.todense()` of a SciPy sparse matrix above a size limit raise
+`sct.DenseConversionError` (a `MemoryError`), whoever calls it:
+
+```python
+with sct.dense_guard(max_elements=5e8):  # default 5e8 elements, ~2 GB as float32
+    ...  # adata.X.toarray() on a 930k x 32k matrix now fails at once instead of exhausting RAM
+
+sct.install_dense_guard(1e9)  # or for the rest of the session, e.g. at the top of a notebook
+sct.remove_dense_guard()
+```
+
+Small dense blocks created inside scanpy/anndata stay below the limit and are unaffected. The
+guard patches SciPy's sparse classes, so it applies to the whole process (all threads). Nested
+`dense_guard` blocks restore the outer limit on exit.
+
 ## Summaries
 
 ```python
