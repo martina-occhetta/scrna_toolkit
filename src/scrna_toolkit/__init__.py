@@ -8,6 +8,13 @@ try:
 except PackageNotFoundError:  # running from a source tree without installation
     __version__ = "0.0.0+unknown"
 
+from scrna_toolkit.datasets import (
+    DatasetAdapter,
+    GEODataset,
+    get_dataset,
+    list_datasets,
+    register_dataset,
+)
 from scrna_toolkit.io import (
     detect_format,
     download_geo_processed_files,
@@ -54,6 +61,8 @@ from scrna_toolkit.summary import summarize_by, summarize_dataset
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
+    "DatasetAdapter",
+    "GEODataset",
     "QCReport",
     "__version__",
     "calculate_qc_metrics",
@@ -62,10 +71,12 @@ __all__ = [
     "filter_cells",
     "filter_genes",
     "get_config",
+    "get_dataset",
     "get_geo_metadata",
     "get_history",
     "get_representation",
     "harmonise_obs",
+    "list_datasets",
     "list_geo_samples",
     "list_geo_supplementary_files",
     "load_samples",
@@ -85,6 +96,7 @@ __all__ = [
     "qc_report",
     "qc_summary",
     "record_step",
+    "register_dataset",
     "run_leiden",
     "run_neighbors",
     "run_pca",
