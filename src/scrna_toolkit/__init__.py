@@ -29,6 +29,8 @@ from scrna_toolkit.io import (
     load_census,
     load_samples,
     load_scrna,
+    read_h5_axes,
+    read_h5_rows,
 )
 from scrna_toolkit.memory import (
     DenseConversionError,
@@ -118,6 +120,8 @@ __all__ = [
     "preprocess",
     "qc_report",
     "qc_summary",
+    "read_h5_axes",
+    "read_h5_rows",
     "record_step",
     "register_dataset",
     "remove_dense_guard",
