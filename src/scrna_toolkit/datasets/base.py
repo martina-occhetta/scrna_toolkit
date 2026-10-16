@@ -13,6 +13,7 @@ from typing import Any
 
 from anndata import AnnData
 
+from scrna_toolkit.io.census import DEFAULT_MAX_CELLS, load_census
 from scrna_toolkit.io.geo import download_geo_processed_files
 from scrna_toolkit.io.loaders import FormatDetectionError, detect_format, load_scrna
 from scrna_toolkit.metadata.harmonise import harmonise_obs
@@ -114,6 +115,64 @@ class GEODataset(DatasetAdapter):
         if "dataset" not in adata.obs:
             adata.obs["dataset"] = self.accession
         return adata
+
+    def harmonise_metadata(self, adata: AnnData) -> AnnData:
+        return harmonise_obs(adata, self.obs_mapping) if self.obs_mapping else adata
+
+
+class CensusDataset(DatasetAdapter):
+    """A CELLxGENE Census query, cached as ``data_dir/census/<name>.h5ad``.
+
+    :meth:`download` runs the query once (see :func:`load_census` for the parameters) and
+    writes the result. :meth:`load` reads the cached file, so repeated runs (e.g. on HPC)
+    neither re-query nor need network access. Pin ``census_version`` to a build date for
+    reproducible results.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        obs_value_filter: str,
+        data_dir: str | Path = "data/raw",
+        *,
+        organism: str = "Homo sapiens",
+        census_version: str = "stable",
+        var_value_filter: str | None = None,
+        obs_column_names: Sequence[str] | None = None,
+        max_cells: int | None = DEFAULT_MAX_CELLS,
+        obs_mapping: Mapping[str, str] | None = None,
+    ) -> None:
+        super().__init__(data_dir)
+        self.name = name
+        self.query: dict[str, Any] = {
+            "obs_value_filter": obs_value_filter,
+            "organism": organism,
+            "census_version": census_version,
+            "var_value_filter": var_value_filter,
+            "obs_column_names": obs_column_names,
+            "max_cells": max_cells,
+        }
+        self.obs_mapping = dict(obs_mapping or {})
+
+    @property
+    def path(self) -> Path:
+        return self.data_dir / "census" / f"{self.name}.h5ad"
+
+    def download(self) -> list[Path]:
+        if self.path.exists():
+            logger.info("%s exists; not re-querying the Census", self.path)
+            return [self.path]
+        adata = load_census(**self.query)
+        if "dataset" not in adata.obs:
+            adata.obs["dataset"] = self.name
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        adata.write_h5ad(self.path)
+        return [self.path]
+
+    def load(self) -> AnnData:
+        if not self.path.exists():
+            raise FileNotFoundError(f"{self.path} does not exist; call download() first")
+        return load_scrna(self.path)
 
     def harmonise_metadata(self, adata: AnnData) -> AnnData:
         return harmonise_obs(adata, self.obs_mapping) if self.obs_mapping else adata
