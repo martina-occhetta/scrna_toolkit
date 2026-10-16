@@ -83,6 +83,9 @@ Everything routine is importable from `scrna_toolkit` directly. See
 ```bash
 scrna-toolkit geo-info GSE165897 --samples
 scrna-toolkit download-geo GSE165897 --output data/raw/ --pattern "*counts*"
+scrna-toolkit download-census --filter "tissue_general == 'lung' and is_primary_data == True" \
+    --census-version 2025-11-08 --output data/raw/census/lung.h5ad
+scrna-toolkit download-census-dataset 0895c838-e550-48a3-a777-dbcd35d30272 --output data/raw/census
 scrna-toolkit preprocess --input data/raw/dataset.h5 --config preprocessing.yaml \
     --output data/processed/dataset.h5ad --report-dir reports/qc
 scrna-toolkit summarize data/processed/dataset.h5ad --groupby patient_id

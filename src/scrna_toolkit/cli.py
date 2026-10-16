@@ -19,10 +19,12 @@ from anndata import AnnData
 from scrna_toolkit import __version__
 from scrna_toolkit.config import Config, load_config
 from scrna_toolkit.io import (
+    download_census_h5ad,
     download_geo_processed_files,
     get_geo_metadata,
     list_geo_samples,
     list_geo_supplementary_files,
+    load_census,
     load_scrna,
 )
 from scrna_toolkit.metadata import harmonise_obs
@@ -63,6 +65,33 @@ def cmd_download_geo(args: argparse.Namespace) -> None:
     )
     for path in paths:
         print(path)
+
+
+def cmd_download_census(args: argparse.Namespace) -> None:
+    if args.output.exists() and not args.overwrite:
+        raise FileExistsError(f"{args.output} exists; pass --overwrite to replace it")
+    adata = load_census(
+        args.filter,
+        organism=args.organism,
+        census_version=args.census_version,
+        var_value_filter=args.var_filter,
+        obs_column_names=args.obs_columns.split(",") if args.obs_columns else None,
+        max_cells=args.max_cells or None,
+    )
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    adata.write_h5ad(args.output)
+    print(f"{args.output} ({adata.n_obs} cells x {adata.n_vars} genes)")
+
+
+def cmd_download_census_dataset(args: argparse.Namespace) -> None:
+    print(
+        download_census_h5ad(
+            args.dataset_id,
+            args.output,
+            census_version=args.census_version,
+            overwrite=args.overwrite,
+        )
+    )
 
 
 def _load(args: argparse.Namespace) -> AnnData:
@@ -156,6 +185,30 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--include-samples", action="store_true")
     p.add_argument("--overwrite", action="store_true")
     p.set_defaults(func=cmd_download_geo)
+
+    p = sub.add_parser(
+        "download-census", help="query the CELLxGENE Census (needs the [census] extra)"
+    )
+    p.add_argument("--filter", required=True, help="obs value filter, e.g. \"tissue == 'lung'\"")
+    p.add_argument("--output", type=Path, required=True, help="output .h5ad")
+    p.add_argument("--organism", default="Homo sapiens")
+    p.add_argument("--census-version", default="stable", help="build date (recommended) or alias")
+    p.add_argument("--var-filter", help="gene filter, e.g. \"feature_name in ['CD3E']\"")
+    p.add_argument("--obs-columns", help="comma-separated obs columns to fetch (default: all)")
+    p.add_argument(
+        "--max-cells", type=int, default=1_000_000, help="refuse larger queries (0 disables)"
+    )
+    p.add_argument("--overwrite", action="store_true")
+    p.set_defaults(func=cmd_download_census)
+
+    p = sub.add_parser(
+        "download-census-dataset", help="download a Census dataset's original source H5AD"
+    )
+    p.add_argument("dataset_id")
+    p.add_argument("--output", type=Path, required=True, help="output directory")
+    p.add_argument("--census-version", default="stable")
+    p.add_argument("--overwrite", action="store_true")
+    p.set_defaults(func=cmd_download_census_dataset)
 
     p = sub.add_parser("preprocess", help="load, harmonise, QC-filter and preprocess")
     p.add_argument("--input", type=Path, required=True)
