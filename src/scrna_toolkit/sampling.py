@@ -9,8 +9,10 @@ level by level (by default donor, optionally then sample/library):
 2. Within the innermost group, cells are allocated across cell types in proportion to their
    size, with a floor so rare types are kept.
 
-Every selected cell gets a weight: the number of cells it represents in its stratum
-(innermost group x cell type). Weighted counts recover full-data composition.
+Every stratum (innermost group x cell type) gets at least one cell; a budget too small for that
+raises instead of silently dropping donors. Each selected cell's weight is the number of cells
+it represents in its stratum, so the weights sum to ``len(obs)`` and weighted counts recover
+full-data composition.
 """
 
 from __future__ import annotations
@@ -55,7 +57,10 @@ def waterfill(sizes: pd.Series, budget: int) -> pd.Series:
 
 
 def _proportional_with_floor(sizes: pd.Series, budget: int, floor: int) -> pd.Series:
-    """Allocation proportional to size, with ``min(size, floor)`` guaranteed per group."""
+    """Allocation proportional to size, with ``min(size, floor)`` guaranteed per group.
+
+    Falls back to :func:`waterfill` when the floors alone exceed ``budget``.
+    """
     base = np.minimum(sizes, floor)
     if base.sum() >= budget:
         return waterfill(sizes, budget)
@@ -66,7 +71,7 @@ def _proportional_with_floor(sizes: pd.Series, budget: int, floor: int) -> pd.Se
     remainder = rest - int(extra.sum())  # largest-remainder rounding, so the total is exact
     order = (share - extra).sort_values(ascending=False, kind="stable").index
     extra.loc[order[:remainder]] += 1
-    return (base + np.minimum(extra, room)).astype(np.int64)
+    return (base + extra).astype(np.int64)
 
 
 def _split(positions: np.ndarray, codes: np.ndarray) -> dict[int, np.ndarray]:
@@ -74,65 +79,6 @@ def _split(positions: np.ndarray, codes: np.ndarray) -> dict[int, np.ndarray]:
     order = np.argsort(codes[positions], kind="stable")
     keys, starts = np.unique(codes[positions][order], return_index=True)
     return dict(zip(keys.tolist(), np.split(positions[order], starts[1:]), strict=True))
-
-
-def _stratified_positions(
-    obs: pd.DataFrame,
-    n_cells: int,
-    *,
-    levels: Sequence[str],
-    cell_type_key: str | None,
-    min_cells_per_type: int,
-    seed: int,
-) -> tuple[np.ndarray, np.ndarray]:
-    if n_cells <= 0:
-        raise ValueError("n_cells must be positive")
-    if min_cells_per_type < 0:
-        raise ValueError("min_cells_per_type must be non-negative")
-    missing = [c for c in [*levels, *([cell_type_key] if cell_type_key else [])] if c not in obs]
-    if missing:
-        raise KeyError(f"Columns not in obs: {missing}")
-    level_codes = []
-    for column in levels:
-        if obs[column].isna().any():
-            raise ValueError(f"obs[{column!r}] has missing values; cannot stratify by it")
-        level_codes.append(pd.factorize(obs[column], sort=True)[0])
-    type_codes = (
-        pd.factorize(obs[cell_type_key], sort=True, use_na_sentinel=False)[0]
-        if cell_type_key
-        else None
-    )
-
-    rng = np.random.default_rng(seed)
-    picked: list[np.ndarray] = []
-    weights: list[np.ndarray] = []
-
-    def take(pool: np.ndarray, k: int) -> None:
-        if k > 0:
-            picked.append(rng.choice(pool, size=k, replace=False))
-            weights.append(np.full(k, len(pool) / k))
-
-    def allocate(positions: np.ndarray, depth: int, budget: int) -> None:
-        if depth < len(level_codes):
-            groups = _split(positions, level_codes[depth])
-            sizes = pd.Series({key: len(pos) for key, pos in groups.items()})
-            for key, k in waterfill(sizes, budget).items():
-                if k > 0:
-                    allocate(groups[key], depth + 1, int(k))
-        elif type_codes is None:
-            take(positions, min(budget, len(positions)))
-        else:
-            strata = _split(positions, type_codes)
-            sizes = pd.Series({key: len(pos) for key, pos in strata.items()})
-            for key, k in _proportional_with_floor(sizes, budget, min_cells_per_type).items():
-                take(strata[key], int(k))
-
-    allocate(np.arange(len(obs)), 0, int(n_cells))
-    if not picked:
-        return np.array([], dtype=np.int64), np.array([], dtype=float)
-    positions = np.concatenate(picked)
-    order = np.argsort(positions)
-    return positions[order], np.concatenate(weights)[order]
 
 
 def stratified_sample(
@@ -144,7 +90,7 @@ def stratified_sample(
     min_cells_per_type: int = 25,
     seed: int = 0,
 ) -> pd.Series:
-    """Choose about ``n_cells`` rows of ``obs``, balanced across donors (and other levels).
+    """Choose ``min(n_cells, len(obs))`` rows of ``obs``, balanced across donors.
 
     Parameters
     ----------
@@ -164,18 +110,74 @@ def stratified_sample(
         Weights indexed by the selected ``obs`` names, in the original row order: the number of
         cells each selected cell represents in its stratum. They sum to ``len(obs)``.
 
-    Exactly ``min(n_cells, len(obs))`` cells are selected. When the cell-type floors alone
-    exceed a group's budget, that group's budget is water-filled across cell types instead.
+    Raises
+    ------
+    ValueError
+        If ``n_cells`` is too small to give every stratum (every donor, every group of the
+        other levels and every cell type within them) at least one cell. Dropping a donor
+        would make the sample, and its weights, unrepresentative.
     """
-    positions, weights = _stratified_positions(
-        obs,
-        n_cells,
-        levels=levels,
-        cell_type_key=cell_type_key,
-        min_cells_per_type=min_cells_per_type,
-        seed=seed,
+    if n_cells <= 0:
+        raise ValueError("n_cells must be positive")
+    if min_cells_per_type < 0:
+        raise ValueError("min_cells_per_type must be non-negative")
+    keys = [*levels, *([cell_type_key] if cell_type_key else [])]
+    missing = [c for c in keys if c not in obs]
+    if missing:
+        raise KeyError(f"Columns not in obs: {missing}")
+    level_codes = []
+    for column in levels:
+        if obs[column].isna().any():
+            raise ValueError(f"obs[{column!r}] has missing values; cannot stratify by it")
+        level_codes.append(pd.factorize(obs[column], sort=True)[0])
+    type_codes = (
+        pd.factorize(obs[cell_type_key], sort=True, use_na_sentinel=False)[0]
+        if cell_type_key
+        else None
     )
-    return pd.Series(weights, index=obs.index[positions], name=WEIGHT_KEY)
+    n_strata = obs.groupby(keys, dropna=False, observed=True).ngroups if keys else 1
+
+    def check_no_empty(alloc: pd.Series, what: str) -> None:
+        n_empty = int((alloc == 0).sum())
+        if n_empty:
+            raise ValueError(
+                f"n_cells={n_cells} is too small: {n_empty} of {len(alloc)} {what} groups would "
+                f"get no cells, so they could not be represented. Increase n_cells (at least "
+                f"{n_strata}, one per stratum, is needed) or stratify by fewer levels."
+            )
+
+    rng = np.random.default_rng(seed)
+    picked: list[np.ndarray] = []
+    weights: list[np.ndarray] = []
+
+    def allocate(positions: np.ndarray, depth: int, budget: int) -> None:
+        if depth < len(level_codes):
+            groups = _split(positions, level_codes[depth])
+            sizes = pd.Series({key: len(pos) for key, pos in groups.items()})
+            alloc = waterfill(sizes, budget)
+            check_no_empty(alloc, repr(levels[depth]))
+            for key, k in alloc.items():
+                allocate(groups[key], depth + 1, int(k))
+            return
+        if type_codes is None:
+            strata = {0: positions}
+            alloc = pd.Series({0: budget})
+        else:
+            strata = _split(positions, type_codes)
+            sizes = pd.Series({key: len(pos) for key, pos in strata.items()})
+            alloc = _proportional_with_floor(sizes, budget, min_cells_per_type)
+            check_no_empty(alloc, repr(cell_type_key))
+        for key, k in alloc.items():
+            pool = strata[key]
+            picked.append(rng.choice(pool, size=int(k), replace=False))
+            weights.append(np.full(int(k), len(pool) / int(k)))
+
+    allocate(np.arange(len(obs)), 0, min(int(n_cells), len(obs)))
+    positions = np.concatenate(picked)
+    order = np.argsort(positions)
+    return pd.Series(
+        np.concatenate(weights)[order], index=obs.index[positions[order]], name=WEIGHT_KEY
+    )
 
 
 def downsample_cells(
@@ -190,10 +192,12 @@ def downsample_cells(
 ) -> AnnData:
     """Return a donor-aware stratified subset of ``adata`` (a copy) with weights in ``obs``.
 
-    See :func:`stratified_sample` for the parameters. The weights are stored in
-    ``obs[weight_key]``; use them to recover full-data composition from the subset.
+    See :func:`stratified_sample` for the parameters and when it raises. The weights are
+    stored in ``obs[weight_key]``; use them to recover full-data composition from the subset.
     """
-    positions, weights = _stratified_positions(
+    if not adata.obs_names.is_unique:
+        raise ValueError("obs_names must be unique; call adata.obs_names_make_unique() first")
+    weights = stratified_sample(
         adata.obs,
         n_cells,
         levels=levels,
@@ -201,8 +205,8 @@ def downsample_cells(
         min_cells_per_type=min_cells_per_type,
         seed=seed,
     )
-    subset = adata[positions].copy()
-    subset.obs[weight_key] = weights
+    subset = adata[weights.index].copy()
+    subset.obs[weight_key] = weights.to_numpy()
     logger.info("Downsampled %d -> %d cells (levels %s)", adata.n_obs, subset.n_obs, list(levels))
     record_step(
         subset,
