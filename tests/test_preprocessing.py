@@ -29,6 +29,26 @@ def test_store_counts_does_not_overwrite_existing_layer(adata):
     np.testing.assert_array_equal(adata.layers["counts"].toarray(), adata.X.toarray() * 2)
 
 
+@pytest.mark.parametrize("dense", [False, True])
+def test_store_counts_unaliases_existing_layer_sharing_memory_with_X(adata, dense):
+    if dense:
+        adata.X = adata.X.toarray()
+    raw = np.asarray(adata.X).copy() if dense else adata.X.toarray()
+    adata.layers["counts"] = adata.X  # the layer and X share one buffer
+    counts = adata.layers["counts"]
+
+    sct.store_counts(adata)
+    sct.normalize_total(adata, target_sum=1e4)
+    sct.log1p(adata)
+
+    assert adata.layers["counts"] is counts  # the existing layer is kept, X was copied
+    stored = adata.layers["counts"] if dense else adata.layers["counts"].toarray()
+    np.testing.assert_array_equal(stored, raw)
+    expected = np.log1p(raw / raw.sum(1, keepdims=True) * 1e4)
+    X = adata.X if dense else adata.X.toarray()
+    np.testing.assert_allclose(X, expected, rtol=1e-4)
+
+
 def test_store_counts_verifies_existing_layer(adata):
     adata.layers["counts"] = adata.X * 0.5
     with pytest.raises(ValueError, match="counts"):
