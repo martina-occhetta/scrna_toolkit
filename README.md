@@ -383,8 +383,13 @@ At each level the budget is *water-filled*: groups smaller than an equal share a
 and the rest is split equally among the larger groups. Within the innermost group, cells are
 allocated across cell types in proportion to their size, with at least `min_cells_per_type`
 per type (or all of them, if fewer). Exactly `min(n_cells, n_obs)` cells are returned, in their
-original order. The weights sum to the original cell count, so weighted counts on the subset
-recover full-data composition. The selection depends only on the inputs and `seed`.
+original order, and the selection depends only on the inputs and `seed`.
+
+Every stratum (each donor, each group of the other levels, and each cell type within them) gets
+at least one cell. If `n_cells` is too small for that, a `ValueError` is raised instead of
+silently dropping donors. The error states the minimum, which is one cell per stratum. As a
+result the weights always sum to the original cell count, so weighted counts on the subset
+recover full-data composition.
 
 ## Plotting
 
