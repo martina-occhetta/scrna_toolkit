@@ -1,39 +1,98 @@
 # scrna-toolkit
 
-A reusable Python package for common single-cell RNA-seq data ingestion, metadata harmonisation,
-QC, preprocessing, and exploratory analysis, built on AnnData and Scanpy.
+Reusable, lightweight utilities for the boring but error-prone parts of single-cell RNA-seq
+analysis: **download → load → harmonise → QC → preprocess → visualise → summarise**. Built on
+[AnnData](https://anndata.readthedocs.io) and [Scanpy](https://scanpy.readthedocs.io), and usable
+from Python, Jupyter, the command line and HPC batch jobs.
 
-> Work in progress: the package is being built incrementally. See the sections below for what is
-> currently available.
+> **QC thresholds are biological and dataset-specific.** Nothing in this package (defaults,
+> examples, configs) is a recommendation for your data. Look at the QC distributions for your
+> tissue, chemistry and sequencing depth before choosing thresholds, and don't copy thresholds
+> blindly from one dataset to another.
+
+## What it does
+
+- Loads `.h5ad`, 10x `.h5`, 10x MTX (gzipped or not, GEO-prefixed) and CSV/TSV count tables,
+  with conservative format detection.
+- Fetches GEO series metadata, sample characteristics and processed supplementary files, with
+  local caching.
+- Harmonises `obs` metadata onto an optional canonical schema and reports metadata problems.
+- Calculates QC metrics and applies explicit, recorded threshold filters.
+- Runs a transparent Scanpy preprocessing pipeline that keeps raw counts safe and checks that
+  inputs really are counts.
+- Produces exploratory plots, dataset summaries and a one-call QC report.
+- Records every step, its parameters and the package version in `adata.uns["scrna_toolkit"]`.
+
+## What it deliberately does not do
+
+Cell-type annotation, batch correction or integration, differential expression, pathway
+enrichment, pseudobulk, trajectory inference, perturbation prediction, foundation-model
+embeddings, MIL, or workflow engines (Nextflow/Snakemake). Biological interpretation belongs in
+your project code. Dataset-specific quirks belong in small [adapters](#datasets-and-adapters).
 
 ## Installation
 
 ```bash
-pip install -e ".[dev]"
+git clone https://github.com/martina-occhetta/scrna_toolkit.git
+cd scrna_toolkit
+pip install -e .          # library + CLI
+pip install -e ".[dev]"   # + pytest, ruff, mypy, jupyter
 ```
 
-## Provenance
+Requires Python ≥ 3.10. Optional: `scikit-misc` for `hvg_flavor="seurat_v3"`.
 
-Every transformation records its parameters in `adata.uns["scrna_toolkit"]["history"]`
-(parameters are stored as JSON strings so they survive `write_h5ad`). Read it back with:
+## Quick start
 
 ```python
 import scrna_toolkit as sct
 
-sct.get_history(adata)
+adata = sct.load_scrna("data/matrix.h5")
+adata = sct.harmonise_obs(
+    adata,
+    {
+        "donor": "patient_id",
+        "sample": "sample_id",
+        "annotation": "cell_type",
+    },
+)
+adata = sct.calculate_qc_metrics(adata)
+adata = sct.filter_cells(
+    adata,
+    min_genes=200,  # illustrative: choose thresholds for YOUR data
+    max_pct_mt=20,
+)
+adata = sct.preprocess(
+    adata,
+    n_hvgs=3000,
+    n_pcs=50,
+)
+sct.plot_umap(
+    adata,
+    color=["patient_id", "cell_type"],
+)
+summary = sct.summarize_dataset(adata)
 ```
 
-## Configuration
+Everything routine is importable from `scrna_toolkit` directly. See
+[`examples/basic_usage.ipynb`](examples/basic_usage.ipynb) for a runnable walkthrough.
 
-Pipelines can be configured from YAML (`qc`, `preprocessing`, `metadata` sections; every key is
-optional and unknown keys raise an error):
+## Command line
 
-```python
-from scrna_toolkit.config import load_config
-
-config = load_config("config.yaml")
-config.metadata.to_mapping()  # {"patient": "patient_id", ...}
+```bash
+scrna-toolkit geo-info GSE165897 --samples
+scrna-toolkit download-geo GSE165897 --output data/raw/ --pattern "*counts*"
+scrna-toolkit preprocess --input data/raw/dataset.h5 --config preprocessing.yaml \
+    --output data/processed/dataset.h5ad --report-dir reports/qc
+scrna-toolkit summarize data/processed/dataset.h5ad --groupby patient_id
+scrna-toolkit qc-report data/processed/dataset.h5ad --output reports/qc
 ```
+
+`preprocess` runs load → harmonise (`metadata` section) → QC metrics → cell/gene filtering
+(`qc` section) → `preprocess` (`preprocessing` section) and writes an h5ad that records both
+configs. Without `--config` the defaults are used, so pass your own thresholds. `summarize`
+opens h5ad files in backed mode (only `obs` is read). Delimited inputs need `--orientation`.
+Every command logs to stderr, `-v` enables debug logging with tracebacks, and failures exit
+with a non-zero code. `python -m scrna_toolkit` works too.
 
 ## Loading data
 
@@ -51,6 +110,22 @@ Supported: `.h5ad`, 10x `.h5`, 10x MTX directories (`matrix.mtx` + `barcodes.tsv
 conservative: ambiguous inputs raise `FormatDetectionError`. Delimited tables always need an
 explicit `orientation`, since it cannot be inferred reliably. Gene symbols become `var_names`
 and Ensembl IDs are kept in `var["gene_ids"]`.
+
+## GEO
+
+```python
+meta = sct.get_geo_metadata("GSE165897")  # title, summary, samples, files, ...
+samples = sct.list_geo_samples("GSE165897")  # one row per GSM with parsed characteristics
+files = sct.list_geo_supplementary_files("GSE165897", include_samples=True)
+paths = sct.download_geo_processed_files("GSE165897", "data/raw", patterns=["*counts*"])
+```
+
+Metadata comes from GEO's plain-text SOFT endpoint, not HTML scraping, and is cached under
+`~/.cache/scrna_toolkit` (override with `$SCRNA_TOOLKIT_CACHE`; pass `refresh=True` to
+re-fetch). Downloads include only processed supplementary files by default. `*_RAW.tar`
+archives (`kinds=["raw_archive"]`) and sequence files such as FASTQ/BAM (`kinds=["sequence"]`)
+must be requested explicitly, and reads stored in SRA are never downloaded. Network calls
+retry transient failures and raise `DownloadError`/`GEOError` with the URL involved.
 
 ## Metadata conventions
 
@@ -181,22 +256,6 @@ The report includes a dataset summary, metadata issues, QC metric quantiles, cel
 sample/patient/cell type, and QC, composition and UMAP figures. Anything whose data is
 absent is skipped. With `output_dir`, tables are written as CSV and figures as PNG.
 
-## GEO
-
-```python
-meta = sct.get_geo_metadata("GSE165897")  # title, summary, samples, files, ...
-samples = sct.list_geo_samples("GSE165897")  # one row per GSM with parsed characteristics
-files = sct.list_geo_supplementary_files("GSE165897", include_samples=True)
-paths = sct.download_geo_processed_files("GSE165897", "data/raw", patterns=["*counts*"])
-```
-
-Metadata comes from GEO's plain-text SOFT endpoint, not HTML scraping, and is cached under
-`~/.cache/scrna_toolkit` (override with `$SCRNA_TOOLKIT_CACHE`; pass `refresh=True` to
-re-fetch). Downloads include only processed supplementary files by default. `*_RAW.tar`
-archives (`kinds=["raw_archive"]`) and sequence files such as FASTQ/BAM (`kinds=["sequence"]`)
-must be requested explicitly, and reads stored in SRA are never downloaded. Network calls
-retry transient failures and raise `DownloadError`/`GEOError` with the URL involved.
-
 ## Datasets and adapters
 
 Most GEO series need no custom code:
@@ -249,23 +308,50 @@ adata = sct.get_dataset("my-ovarian-atlas").get()
 
 Adapters belong in project code. The package does not ship hard-coded biological datasets.
 
-## Command line
+## Configuration
 
-```bash
-scrna-toolkit geo-info GSE165897 --samples
-scrna-toolkit download-geo GSE165897 --output data/raw/ --pattern "*counts*"
-scrna-toolkit preprocess --input data/raw/dataset.h5 --config preprocessing.yaml \
-    --output data/processed/dataset.h5ad --report-dir reports/qc
-scrna-toolkit summarize data/processed/dataset.h5ad --groupby patient_id
-scrna-toolkit qc-report data/processed/dataset.h5ad --output reports/qc
+Pipelines can be configured from YAML (`qc`, `preprocessing`, `metadata` sections; every key is
+optional and unknown keys raise an error):
+
+```python
+from scrna_toolkit.config import load_config
+
+config = load_config("config.yaml")
+config.metadata.to_mapping()  # {"patient": "patient_id", ...}
 ```
 
-`preprocess` runs load → harmonise (`metadata` section) → QC metrics → cell/gene filtering
-(`qc` section) → `preprocess` (`preprocessing` section) and writes an h5ad that records both
-configs. Without `--config` the defaults are used, so pass your own thresholds. `summarize`
-opens h5ad files in backed mode (only `obs` is read). Delimited inputs need `--orientation`.
-Every command logs to stderr, `-v` enables debug logging with tracebacks, and failures exit
-with a non-zero code. `python -m scrna_toolkit` works too.
+See [`examples/example_config.yaml`](examples/example_config.yaml) for every key with comments.
+
+## Conventions
+
+- **What changes in place.** Annotation and transformation steps (`harmonise_obs`,
+  `calculate_qc_metrics`, the preprocessing steps) modify `adata` in place, as Scanpy does, so
+  large matrices are not copied. They return `adata` so calls can be chained.
+  `preprocess(..., copy=True)` works on a copy instead.
+- **Filtering returns a new object.** `filter_cells`/`filter_genes` leave the input untouched
+  unless `inplace=True`.
+- **Missing metadata is never fabricated.** Functions skip, report or return `NaN`/`None`
+  instead of guessing. Plots for absent columns are skipped with a logged warning.
+- **Sparse by default.** Matrices stay sparse. The only densifying step is scaling for PCA, which
+  is limited to a temporary HVG block, and a warning is logged before large dense blocks are
+  created.
+- **Logging, not printing.** Library code logs to the `scrna_toolkit` logger. Configure it with
+  `logging.basicConfig(level=logging.INFO)`. The CLI does this for you.
+
+## Reproducibility and provenance
+
+- Every stochastic step (`run_pca`, `run_neighbors`, `run_umap`, `run_leiden`, `preprocess`)
+  takes a `seed` (default 0), so identical inputs give identical embeddings and clusters.
+- `adata.uns["scrna_toolkit"]` holds the `package_version`, a timestamped `history` of every
+  step with its parameters, the `qc_config`/`preprocessing_config` used, and `X_representation`.
+  Values are stored as JSON strings, so they survive `write_h5ad` and no large or
+  non-serialisable objects are kept.
+
+```python
+sct.get_history(adata)  # list of {"step", "timestamp", "params"}
+sct.get_config(adata, "preprocessing")  # dict or None
+sct.get_representation(adata)  # "counts" | "normalized" | "log1p" | "scaled" | None
+```
 
 ## Examples
 
@@ -275,13 +361,16 @@ with a non-zero code. `python -m scrna_toolkit` works too.
 - [`examples/example_config.yaml`](examples/example_config.yaml) is a commented config with
   every key, for `scrna-toolkit preprocess --config`.
 
-## Development
+## Development and testing
 
 ```bash
-pytest                 # unit tests: synthetic data, no network
+pytest                 # unit tests: synthetic AnnData, no network
 pytest -m integration  # live GEO tests (network)
 ruff check .
 ruff format --check .
 mypy
 ```
 
+The unit tests generate small synthetic datasets and never download anything. Tests that
+contact GEO are marked `integration` and excluded by default. CI runs ruff, mypy and pytest on
+every pull request.
