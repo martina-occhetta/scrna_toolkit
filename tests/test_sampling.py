@@ -92,6 +92,51 @@ def test_missing_values():
         sct.stratified_sample(obs, 0, levels=("sample_id",))
 
 
+def _ten_donors():
+    obs = pd.DataFrame(
+        {
+            "patient_id": [f"D{i // 100}" for i in range(1000)],
+            "cell_type": [
+                ["T", "B", "Myeloid", "Rare"][min(i % 100 // 30, 3)] for i in range(1000)
+            ],
+        }
+    )
+    obs.index = [f"c{i}" for i in range(len(obs))]
+    return obs
+
+
+def test_budget_too_small_for_every_donor_raises():
+    obs = _ten_donors()
+    with pytest.raises(ValueError, match=r"5 of 10 'patient_id' groups.*at least 10,"):
+        sct.stratified_sample(obs, 5)
+    assert sct.stratified_sample(obs, 10).groupby(obs["patient_id"]).size().eq(1).all()
+
+
+def test_budget_too_small_for_every_cell_type_raises():
+    obs = _ten_donors()
+    with pytest.raises(ValueError, match=r"'cell_type' groups.*at least 40,"):
+        sct.stratified_sample(obs, 30, cell_type_key="cell_type")
+
+
+@pytest.mark.parametrize("cell_type_key", [None, "cell_type"])
+@pytest.mark.parametrize("levels", [("patient_id",), ("patient_id", "sample_id")])
+def test_weights_always_sum_to_n_obs_or_raise(levels, cell_type_key):
+    obs = _obs()
+    keys = [*levels, *([cell_type_key] if cell_type_key else [])]
+    n_strata = obs.groupby(keys).ngroups
+    for n_cells in [1, 7, n_strata - 1, n_strata, n_strata + 3, 100, 600, 5000, 10**6]:
+        try:
+            weights = sct.stratified_sample(
+                obs, n_cells, levels=levels, cell_type_key=cell_type_key, min_cells_per_type=5
+            )
+        except ValueError as err:
+            assert "too small" in str(err)
+            continue
+        assert len(weights) == min(n_cells, len(obs))
+        assert weights.sum() == pytest.approx(len(obs))  # every stratum is represented
+        assert obs.loc[weights.index].groupby(keys).ngroups == n_strata
+
+
 def test_downsample_cells_returns_weighted_copy(adata):
     adata.obs["patient_id"] = adata.obs["patient"]
 
