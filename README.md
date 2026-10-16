@@ -88,6 +88,43 @@ Ensembl IDs. Ribosomal (`ribosomal_prefixes=("RPS", "RPL")`) and haemoglobin
 pass thresholds; the values above are illustrations, not recommendations. Always inspect the QC
 distributions for your tissue, chemistry and sequencing depth before choosing them.
 
+## Preprocessing
+
+```python
+adata = sct.preprocess(adata, n_hvgs=3000, n_pcs=50)  # or preprocess(adata, config.preprocessing)
+```
+
+`preprocess` runs these steps, each also available on its own:
+
+| Step | Input | Output |
+| --- | --- | --- |
+| `store_counts` | `X` (counts) | `layers["counts"]` (one copy) |
+| `normalize_total` | `X` counts | `X` normalized to `target_sum` |
+| `log1p` | `X` normalized | `X` log1p (all genes, sparse) |
+| `select_hvgs` | `X` log1p (`layers["counts"]` for `seurat_v3`) | `var["highly_variable"]` |
+| `run_pca` | scaled *temporary copy* of HVG columns | `obsm["X_pca"]`, `varm["PCs"]` |
+| `run_neighbors` | `obsm["X_pca"]` | `obsp` graph |
+| `run_umap` | graph | `obsm["X_umap"]` |
+| `run_leiden` | graph | `obs["leiden"]` |
+
+Steps work in place and return `adata` (`preprocess(..., copy=True)` works on a copy). All
+stochastic steps take `seed` (default 0), so results are reproducible. The configuration is
+stored in `adata.uns["scrna_toolkit"]["preprocessing_config"]` (`sct.get_config(adata, "preprocessing")`).
+
+### How raw counts are handled
+
+- **`adata.layers["counts"]`** holds the untouched raw count matrix. This is the canonical place
+  for counts, and `store_counts` writes it once before normalization.
+- **`adata.X`** starts as counts and is rewritten in place to normalized, then log1p values. It
+  keeps all genes and stays sparse.
+- **`adata.raw`** is not used by this package. It is a frozen snapshot of a whole AnnData and is
+  often confused with raw counts.
+- `adata.uns["scrna_toolkit"]["X_representation"]` records what `X` currently holds. Normalizing
+  or log-transforming twice raises an error.
+
+Scaling densifies data, so `run_pca(scale=True)` scales only a temporary dense copy of the HVG
+columns and leaves `X` unchanged. A warning is logged when a dense block above ~0.8 GB is created.
+
 ## Development
 
 ```bash
