@@ -27,6 +27,7 @@ from scrna_toolkit.io import (
     load_census,
     load_scrna,
 )
+from scrna_toolkit.io.loaders import FORMATS
 from scrna_toolkit.metadata import harmonise_obs
 from scrna_toolkit.preprocessing import preprocess
 from scrna_toolkit.provenance import record_config
@@ -154,7 +155,7 @@ def cmd_qc_report(args: argparse.Namespace) -> None:
 
 
 def _add_input_options(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--format", choices=["h5ad", "10x_h5", "10x_mtx", "csv", "tsv"])
+    parser.add_argument("--format", choices=list(FORMATS))
     parser.add_argument("--orientation", choices=["cells_x_genes", "genes_x_cells"])
     parser.add_argument("--prefix", help="10x MTX filename prefix, e.g. GSM123_")
 

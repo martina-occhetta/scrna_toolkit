@@ -1,8 +1,9 @@
 """Load common single-cell count formats into AnnData (cells x genes).
 
-Supported formats: ``h5ad``, ``10x_h5`` (Cell Ranger .h5), ``10x_mtx`` (matrix.mtx +
-barcodes.tsv + features.tsv/genes.tsv, optionally gzipped and/or with a GEO-style filename
-prefix) and dense ``csv``/``tsv`` count tables.
+Supported formats: ``h5ad``, ``h5ad_legacy`` (anndata < 0.7 HDF5, often saved as ``.h5``),
+``10x_h5`` (Cell Ranger .h5), ``10x_mtx`` (matrix.mtx + barcodes.tsv + features.tsv/genes.tsv,
+optionally gzipped and/or with a GEO-style filename prefix) and dense ``csv``/``tsv`` count
+tables. A ``.h5`` file is opened to tell 10x, legacy AnnData and current AnnData layouts apart.
 
 Detection is deliberately conservative: anything ambiguous raises
 :class:`FormatDetectionError` instead of guessing.
@@ -23,13 +24,15 @@ import scipy.io
 import scipy.sparse as sp
 from anndata import AnnData
 
+from scrna_toolkit._utils import unique_gene_names as _unique_gene_names
+from scrna_toolkit.io.h5 import DEFAULT_CHUNK_NNZ, _read_rows, h5_layout
 from scrna_toolkit.provenance import record_step
 
 logger = logging.getLogger(__name__)
 
-Format = Literal["h5ad", "10x_h5", "10x_mtx", "csv", "tsv"]
+Format = Literal["h5ad", "h5ad_legacy", "10x_h5", "10x_mtx", "csv", "tsv"]
 Orientation = Literal["cells_x_genes", "genes_x_cells"]
-FORMATS: tuple[str, ...] = ("h5ad", "10x_h5", "10x_mtx", "csv", "tsv")
+FORMATS: tuple[str, ...] = ("h5ad", "h5ad_legacy", "10x_h5", "10x_mtx", "csv", "tsv")
 
 
 class FormatDetectionError(ValueError):
@@ -94,7 +97,12 @@ def detect_format(path: str | Path, prefix: str | None = None) -> str:
     if name.endswith(".h5ad"):
         return "h5ad"
     if name.endswith(".h5"):
-        return "10x_h5"
+        try:
+            return h5_layout(path)
+        except (OSError, ValueError) as err:
+            raise FormatDetectionError(
+                f"Cannot tell what kind of .h5 file {path.name!r} is ({err}); pass format=."
+            ) from err
     if name.endswith("matrix.mtx"):
         return "10x_mtx"
     if name.endswith(".csv"):
@@ -104,14 +112,6 @@ def detect_format(path: str | Path, prefix: str | None = None) -> str:
     raise FormatDetectionError(
         f"Cannot infer format of {path.name!r}; pass format= one of {FORMATS}."
     )
-
-
-def _unique_gene_names(names: pd.Index) -> pd.Index:
-    if names.is_unique:
-        return names
-    n_dup = int(names.duplicated().sum())
-    logger.warning("%d duplicated gene names made unique (gene_ids are preserved)", n_dup)
-    return ad.utils.make_index_unique(names)
 
 
 def _read_10x_mtx(path: Path, prefix: str | None, gex_only: bool) -> AnnData:
@@ -186,7 +186,9 @@ def load_scrna(
     path
         File or (for 10x MTX) directory.
     format
-        One of ``h5ad``, ``10x_h5``, ``10x_mtx``, ``csv``, ``tsv``; inferred if omitted.
+        One of ``h5ad``, ``h5ad_legacy``, ``10x_h5``, ``10x_mtx``, ``csv``, ``tsv``; inferred
+        if omitted. For a subset of a large ``h5ad_legacy`` (or CSR ``h5ad``) file, use
+        :func:`scrna_toolkit.read_h5_rows` instead.
     orientation
         Required for ``csv``/``tsv``: ``"cells_x_genes"`` or ``"genes_x_cells"``.
     prefix
@@ -204,6 +206,8 @@ def load_scrna(
 
     if fmt == "h5ad":
         adata = ad.read_h5ad(path)
+    elif fmt == "h5ad_legacy":
+        adata, _ = _read_rows(path, None, max_nnz_per_chunk=DEFAULT_CHUNK_NNZ, dtype=np.float32)
     elif fmt == "10x_h5":
         import scanpy as sc
 
