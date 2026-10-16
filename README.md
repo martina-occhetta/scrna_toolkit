@@ -177,8 +177,13 @@ sct.download_census_h5ad("0895c838-e550-48a3-a777-dbcd35d30272", "data/raw/censu
 ```python
 sct.harmonise_obs(adata, {"orig.ident": "sample_id", "patient": "patient_id"})  # originals kept
 sct.merge_sample_metadata(adata, sample_table, on="sample_id")  # one row per sample
+sct.merge_sample_metadata(adata, sample_table, strict=True)  # raise if a sample has no row
 report = sct.validate_metadata(adata)  # DataFrame of issues; never raises
 ```
+
+By default, cells whose sample has no row in the table get missing values and a warning is
+logged. `strict=True` raises a `ValueError` listing the unmatched samples instead, before
+`adata` is changed. Rows in the table that match no cells are allowed either way.
 
 `validate_metadata` reports absent fields, duplicated cell IDs, missing/placeholder values,
 samples that map to several patients (or other sample-level fields), and near-duplicate labels
