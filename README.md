@@ -23,6 +23,18 @@ import scrna_toolkit as sct
 sct.get_history(adata)
 ```
 
+## Configuration
+
+Pipelines can be configured from YAML (`qc`, `preprocessing`, `metadata` sections; every key is
+optional and unknown keys raise an error):
+
+```python
+from scrna_toolkit.config import load_config
+
+config = load_config("config.yaml")
+config.metadata.to_mapping()  # {"patient": "patient_id", ...}
+```
+
 ## Development
 
 ```bash
@@ -31,3 +43,4 @@ ruff check .
 ruff format --check .
 mypy
 ```
+
