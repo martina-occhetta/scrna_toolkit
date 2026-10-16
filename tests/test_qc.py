@@ -46,11 +46,13 @@ def test_no_mito_genes_warns(adata, caplog):
     assert "No mt genes" in caplog.text
 
 
-def test_non_count_matrix_warns(adata, caplog):
+def test_non_count_matrix_is_rejected_unless_allowed(adata, caplog):
     adata.X = adata.X * 0.5
-    with caplog.at_level(logging.WARNING):
+    with pytest.raises(ValueError, match="non-integer"):
         sct.calculate_qc_metrics(adata)
-    assert "raw counts" in caplog.text
+    with caplog.at_level(logging.WARNING):
+        sct.calculate_qc_metrics(adata, allow_non_integer=True)
+    assert "accepted as counts" in caplog.text
 
 
 def test_filter_cells_matches_manual_mask_and_keeps_input(adata):

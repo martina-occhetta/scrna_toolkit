@@ -48,10 +48,16 @@ def preprocess(
         adata = adata.copy()
     logger.info("preprocess: %d cells x %d genes, config=%s", adata.n_obs, adata.n_vars, cfg)
 
-    store_counts(adata)
+    store_counts(adata, allow_non_integer=cfg.allow_non_integer_counts)
     normalize_total(adata, target_sum=cfg.target_sum)
     log1p(adata)
-    select_hvgs(adata, cfg.n_hvgs, flavor=cfg.hvg_flavor, batch_key=cfg.hvg_batch_key)
+    select_hvgs(
+        adata,
+        cfg.n_hvgs,
+        flavor=cfg.hvg_flavor,
+        batch_key=cfg.hvg_batch_key,
+        allow_non_integer=cfg.allow_non_integer_counts,
+    )
     run_pca(adata, cfg.n_pcs, scale=cfg.scale, max_value=cfg.scale_max_value, seed=cfg.seed)
     run_neighbors(adata, cfg.n_neighbors, seed=cfg.seed)
     if cfg.run_umap:

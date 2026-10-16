@@ -29,6 +29,18 @@ def test_store_counts_does_not_overwrite_existing_layer(adata):
     np.testing.assert_array_equal(adata.layers["counts"].toarray(), adata.X.toarray() * 2)
 
 
+def test_store_counts_verifies_existing_layer(adata):
+    adata.layers["counts"] = adata.X * 0.5
+    with pytest.raises(ValueError, match="counts"):
+        sct.store_counts(adata)
+
+
+def test_normalize_total_rejects_untracked_log_data(adata):
+    adata.X = adata.X.log1p()  # e.g. a log-normalized h5ad from elsewhere
+    with pytest.raises(ValueError, match="non-integer"):
+        sct.normalize_total(adata)
+
+
 def test_double_normalization_is_refused(adata):
     sct.normalize_total(adata)
     sct.log1p(adata)
@@ -36,7 +48,7 @@ def test_double_normalization_is_refused(adata):
         sct.normalize_total(adata)
     with pytest.raises(ValueError):
         sct.log1p(adata)
-    with pytest.raises(ValueError, match="not counts"):
+    with pytest.raises(ValueError, match="not raw counts"):
         sct.store_counts(adata)
 
 

@@ -11,7 +11,7 @@ import pandas as pd
 import scanpy as sc
 from anndata import AnnData
 
-from scrna_toolkit._utils import looks_like_counts
+from scrna_toolkit.counts import ensure_raw_counts
 from scrna_toolkit.provenance import record_step
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,7 @@ def calculate_qc_metrics(
     hemoglobin_regex: str | None = None,
     gene_symbol_col: str | None = None,
     layer: str | None = None,
+    allow_non_integer: bool = False,
 ) -> AnnData:
     """Add standard QC metrics to ``adata.obs`` (in place) and return ``adata``.
 
@@ -47,10 +48,12 @@ def calculate_qc_metrics(
         ``var`` column holding gene symbols, if ``var_names`` are IDs.
     layer
         Layer holding raw counts; defaults to ``X``.
+    allow_non_integer
+        Accept non-integer counts (see :func:`ensure_raw_counts`).
+
+    Raises ``ValueError`` if the matrix does not hold raw counts.
     """
-    matrix = adata.layers[layer] if layer else adata.X
-    if not looks_like_counts(matrix):
-        logger.warning("QC metrics expect raw counts but the matrix is not integer-valued")
+    ensure_raw_counts(adata, layer, allow_non_integer=allow_non_integer)
 
     symbols = pd.Index(adata.var[gene_symbol_col] if gene_symbol_col else adata.var_names).astype(
         str

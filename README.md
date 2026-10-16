@@ -111,6 +111,23 @@ Steps work in place and return `adata` (`preprocess(..., copy=True)` works on a 
 stochastic steps take `seed` (default 0), so results are reproducible. The configuration is
 stored in `adata.uns["scrna_toolkit"]["preprocessing_config"]` (`sct.get_config(adata, "preprocessing")`).
 
+### Checking that data are raw counts
+
+Functions that assume raw counts (`calculate_qc_metrics`, `store_counts`, `normalize_total`,
+and `select_hvgs` with `seurat_v3`) call `sct.ensure_raw_counts`. It scans the whole
+matrix in row chunks, without densifying, and raises if it finds negative values, non-integer
+values, or a tracked `X_representation` other than counts:
+
+```python
+sct.ensure_raw_counts(adata)  # adata.X
+sct.ensure_raw_counts(adata, layer="counts")
+sct.ensure_raw_counts(adata, allow_non_integer=True)  # e.g. SoupX-corrected counts
+```
+
+`allow_non_integer=True` (or `allow_non_integer_counts: true` in the `qc`/`preprocessing`
+config) accepts fractional values, but then normalized data can no longer be detected. Negative
+values always fail.
+
 ### How raw counts are handled
 
 - **`adata.layers["counts"]`** holds the untouched raw count matrix. This is the canonical place
