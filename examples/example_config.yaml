@@ -1,0 +1,39 @@
+# Example configuration for `scrna-toolkit preprocess --config ...` or
+# `scrna_toolkit.config.load_config(...)`. Every key is optional; unknown keys are errors.
+#
+# QC thresholds are biological and dataset-specific (tissue, chemistry, depth).
+# Inspect the QC distributions for YOUR data before choosing them.
+
+qc:
+  min_genes: 200           # cells with fewer detected genes are removed
+  max_genes: null          # e.g. 6000 to remove likely doublets; null = no limit
+  min_counts: null
+  max_counts: null
+  max_pct_mt: 20           # percent (0-100) of counts from mitochondrial genes
+  min_cells_per_gene: 3
+  mitochondrial_prefix: "MT-"   # "mt-" for mouse
+  ribosomal_prefixes: null      # e.g. ["RPS", "RPL"]
+  hemoglobin_regex: null        # e.g. "^HB[^(P)]"
+  allow_non_integer_counts: false
+
+preprocessing:
+  target_sum: 10000
+  n_hvgs: 3000
+  hvg_flavor: seurat       # seurat_v3 uses layers["counts"] (needs scikit-misc)
+  hvg_batch_key: null
+  scale: true              # scale a temporary HVG copy for PCA; adata.X is untouched
+  scale_max_value: 10
+  n_pcs: 50
+  n_neighbors: 15
+  umap_min_dist: 0.5
+  leiden_resolution: 1.0
+  run_umap: true
+  run_leiden: true
+  seed: 0
+  allow_non_integer_counts: false
+
+metadata:                  # source obs column -> canonical column
+  patient_col: patient     # -> patient_id
+  sample_col: sample       # -> sample_id
+  cell_type_col: annotation  # -> cell_type
+  extra_mapping: {}        # any other {source: target}, e.g. {site: anatomical_site}
