@@ -12,8 +12,9 @@ from Python, Jupyter, the command line and HPC batch jobs.
 
 ## What it does
 
-- Loads `.h5ad`, 10x `.h5`, 10x MTX (gzipped or not, GEO-prefixed) and CSV/TSV count tables,
-  with conservative format detection.
+- Loads `.h5ad` (including legacy pre-0.7 AnnData HDF5), 10x `.h5`, 10x MTX (gzipped or not,
+  GEO-prefixed) and CSV/TSV count tables, with conservative format detection. Selected rows of
+  a matrix larger than memory can be streamed from disk.
 - Fetches GEO series metadata, sample characteristics and processed supplementary files, with
   local caching.
 - Queries the CZ CELLxGENE Census (optional extra) for raw counts, with version pinning.
@@ -115,6 +116,35 @@ Supported: `.h5ad`, 10x `.h5`, 10x MTX directories (`matrix.mtx` + `barcodes.tsv
 conservative: ambiguous inputs raise `FormatDetectionError`. Delimited tables always need an
 explicit `orientation`, since it cannot be inferred reliably. Gene symbols become `var_names`
 and Ensembl IDs are kept in `var["gene_ids"]`.
+
+### `.h5` files and legacy AnnData
+
+A `.h5` file is opened (metadata only) to decide what it is: a Cell Ranger file (`10x_h5`), a
+current AnnData file saved with a `.h5` suffix (`h5ad`), or a **legacy AnnData** file written
+by anndata < 0.7 (`h5ad_legacy`: an `X` group with an `h5sparse_format` attribute and compound
+`obs`/`var` datasets). Current anndata cannot read the legacy layout, but GEO still hosts such
+files (e.g. `GSE180661_matrix.h5`). `load_scrna` reads them, decoding the integer-coded
+categoricals stored under `uns/<column>_categories`. Unrecognised `.h5` layouts raise
+`FormatDetectionError`.
+
+### Loading a subset of a large file
+
+`read_h5_rows` loads only selected rows of a CSR matrix in an AnnData HDF5 file (legacy or
+current), so a subset can be taken from a file larger than memory:
+
+```python
+from scrna_toolkit.io import h5_matrix_info
+
+h5_matrix_info("GSE180661_matrix.h5")  # layout, shape, nnz, dtypes; reads no matrix data
+obs, var = sct.read_h5_axes("GSE180661_matrix.h5")  # barcodes and genes only
+keep = obs.index.isin(annotated_barcodes)  # boolean mask, or integer row positions
+adata = sct.read_h5_rows("GSE180661_matrix.h5", keep, max_nnz_per_chunk=100_000_000)
+```
+
+The file is read in one sequential pass, in chunks of at most `max_nnz_per_chunk` stored
+entries. Peak memory is the output matrix (pre-allocated, `float32` values, `int32` indices
+when they fit) plus one chunk. Chunks containing no selected rows are not read. Rows come back
+in file order, so align other tables to `adata.obs_names`.
 
 ## GEO
 
