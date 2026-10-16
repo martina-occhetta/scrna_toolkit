@@ -10,6 +10,7 @@ except PackageNotFoundError:  # running from a source tree without installation
 
 from scrna_toolkit.counts import ensure_raw_counts
 from scrna_toolkit.datasets import (
+    CensusDataset,
     DatasetAdapter,
     GEODataset,
     get_dataset,
@@ -18,10 +19,13 @@ from scrna_toolkit.datasets import (
 )
 from scrna_toolkit.io import (
     detect_format,
+    download_census_h5ad,
     download_geo_processed_files,
     get_geo_metadata,
+    list_census_datasets,
     list_geo_samples,
     list_geo_supplementary_files,
+    load_census,
     load_samples,
     load_scrna,
 )
@@ -62,12 +66,14 @@ from scrna_toolkit.summary import summarize_by, summarize_dataset
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
+    "CensusDataset",
     "DatasetAdapter",
     "GEODataset",
     "QCReport",
     "__version__",
     "calculate_qc_metrics",
     "detect_format",
+    "download_census_h5ad",
     "download_geo_processed_files",
     "ensure_raw_counts",
     "filter_cells",
@@ -78,9 +84,11 @@ __all__ = [
     "get_history",
     "get_representation",
     "harmonise_obs",
+    "list_census_datasets",
     "list_datasets",
     "list_geo_samples",
     "list_geo_supplementary_files",
+    "load_census",
     "load_samples",
     "load_scrna",
     "log1p",
