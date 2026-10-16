@@ -164,6 +164,22 @@ The report includes a dataset summary, metadata issues, QC metric quantiles, cel
 sample/patient/cell type, and QC, composition and UMAP figures. Anything whose data is
 absent is skipped. With `output_dir`, tables are written as CSV and figures as PNG.
 
+## GEO
+
+```python
+meta = sct.get_geo_metadata("GSE165897")  # title, summary, samples, files, ...
+samples = sct.list_geo_samples("GSE165897")  # one row per GSM with parsed characteristics
+files = sct.list_geo_supplementary_files("GSE165897", include_samples=True)
+paths = sct.download_geo_processed_files("GSE165897", "data/raw", patterns=["*counts*"])
+```
+
+Metadata comes from GEO's plain-text SOFT endpoint, not HTML scraping, and is cached under
+`~/.cache/scrna_toolkit` (override with `$SCRNA_TOOLKIT_CACHE`; pass `refresh=True` to
+re-fetch). Downloads include only processed supplementary files by default. `*_RAW.tar`
+archives (`kinds=["raw_archive"]`) and sequence files such as FASTQ/BAM (`kinds=["sequence"]`)
+must be requested explicitly, and reads stored in SRA are never downloaded. Network calls
+retry transient failures and raise `DownloadError`/`GEOError` with the URL involved.
+
 ## Development
 
 ```bash
