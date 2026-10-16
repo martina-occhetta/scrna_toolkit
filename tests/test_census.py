@@ -99,8 +99,12 @@ def test_max_cells_guard_runs_before_fetching(fake_census):
     assert len(fake_census["get_anndata"]) == 1
 
 
-def test_empty_query_raises(fake_census):
-    fake_census["n_obs"] = 0
+def test_empty_query_raises_without_fetching(fake_census):
+    fake_census["count"] = 0
+    with pytest.raises(ValueError, match="no cells"):
+        sct.load_census(FILTER)
+    assert fake_census["get_anndata"] == []
+    fake_census["n_obs"] = 0  # also caught when the count check is disabled
     with pytest.raises(ValueError, match="no cells"):
         sct.load_census(FILTER, max_cells=None)
 

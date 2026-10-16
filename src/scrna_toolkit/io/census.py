@@ -102,6 +102,8 @@ def load_census(
     with cc.open_soma(census_version=version) as census:
         if max_cells is not None:
             n_cells = _count_cells(census, organism, obs_value_filter)
+            if n_cells == 0:
+                raise ValueError(f"Census query matched no cells: {obs_value_filter!r}")
             if n_cells > max_cells:
                 raise ValueError(
                     f"Query matches {n_cells:,} cells (> max_cells={max_cells:,}); narrow the "
