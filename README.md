@@ -125,6 +125,17 @@ stored in `adata.uns["scrna_toolkit"]["preprocessing_config"]` (`sct.get_config(
 Scaling densifies data, so `run_pca(scale=True)` scales only a temporary dense copy of the HVG
 columns and leaves `X` unchanged. A warning is logged when a dense block above ~0.8 GB is created.
 
+## Summaries
+
+```python
+sct.summarize_dataset(adata)  # pd.Series: n_cells, n_samples, median_cells_per_sample, ...
+sct.summarize_by(adata, "patient_id")  # pd.DataFrame: n_cells, fraction, n_samples, median QC
+sct.summarize_by(adata, "cell_type")
+```
+
+Counts for absent metadata columns are `NaN`, and `missing_metadata` lists the absent
+canonical fields.
+
 ## Development
 
 ```bash
