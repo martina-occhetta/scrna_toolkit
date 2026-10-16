@@ -33,6 +33,8 @@ packages = ["src/scrna_toolkit"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not integration'"
+markers = ["integration: needs network access (live GEO); run with `pytest -m integration`"]
 
 [tool.ruff]
 line-length = 100
