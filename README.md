@@ -258,6 +258,17 @@ values always fail.
 Scaling densifies data, so `run_pca(scale=True)` scales only a temporary dense copy of the HVG
 columns and leaves `X` unchanged. A warning is logged when a dense block above ~0.8 GB is created.
 
+## Summaries
+
+```python
+sct.summarize_dataset(adata)  # pd.Series: n_cells, n_samples, median_cells_per_sample, ...
+sct.summarize_by(adata, "patient_id")  # pd.DataFrame: n_cells, fraction, n_samples, median QC
+sct.summarize_by(adata, "cell_type")
+```
+
+Counts for absent metadata columns are `NaN`, and `missing_metadata` lists the absent
+canonical fields.
+
 ## Donor-aware downsampling
 
 For a laptop-sized development object from a large atlas, plain random sampling keeps the
@@ -283,17 +294,6 @@ allocated across cell types in proportion to their size, with at least `min_cell
 per type (or all of them, if fewer). Exactly `min(n_cells, n_obs)` cells are returned, in their
 original order. The weights sum to the original cell count, so weighted counts on the subset
 recover full-data composition. The selection depends only on the inputs and `seed`.
-
-## Summaries
-
-```python
-sct.summarize_dataset(adata)  # pd.Series: n_cells, n_samples, median_cells_per_sample, ...
-sct.summarize_by(adata, "patient_id")  # pd.DataFrame: n_cells, fraction, n_samples, median QC
-sct.summarize_by(adata, "cell_type")
-```
-
-Counts for absent metadata columns are `NaN`, and `missing_metadata` lists the absent
-canonical fields.
 
 ## Plotting
 
