@@ -52,6 +52,23 @@ conservative: ambiguous inputs raise `FormatDetectionError`. Delimited tables al
 explicit `orientation`, since it cannot be inferred reliably. Gene symbols become `var_names`
 and Ensembl IDs are kept in `var["gene_ids"]`.
 
+## Metadata conventions
+
+`scrna_toolkit.metadata.CANONICAL_FIELDS` defines optional canonical `obs` columns:
+`dataset`, `patient_id`, `donor_id`, `sample_id`, `batch`, `tissue`, `anatomical_site`,
+`condition`, `treatment`, `treatment_status`, `timepoint`, `cell_type`, `cell_subtype`,
+`response`. None are required, and missing metadata is never filled in.
+
+```python
+sct.harmonise_obs(adata, {"orig.ident": "sample_id", "patient": "patient_id"})  # originals kept
+sct.merge_sample_metadata(adata, sample_table, on="sample_id")  # one row per sample
+report = sct.validate_metadata(adata)  # DataFrame of issues; never raises
+```
+
+`validate_metadata` reports absent fields, duplicated cell IDs, missing/placeholder values,
+samples that map to several patients (or other sample-level fields), and near-duplicate labels
+such as `"T cell"` vs `"t_cell"`.
+
 ## Development
 
 ```bash
