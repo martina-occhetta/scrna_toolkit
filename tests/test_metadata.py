@@ -45,6 +45,27 @@ def test_merge_sample_metadata_broadcasts_and_reports_unmatched(adata):
     assert sct.get_history(adata)[-1]["params"]["unmatched_samples"] == ["S3"]
 
 
+def test_merge_sample_metadata_strict_raises_on_unmatched_without_modifying(adata):
+    sct.harmonise_obs(adata, {"orig.ident": "sample_id"})
+    table = pd.DataFrame({"sample_id": ["S0", "S1", "S2"], "tissue": ["tumour", "blood", "tumour"]})
+    n_steps = len(sct.get_history(adata))
+
+    with pytest.raises(ValueError, match=r"1 samples .* \['S3'\]"):
+        sct.merge_sample_metadata(adata, table, strict=True)
+
+    assert "tissue" not in adata.obs
+    assert len(sct.get_history(adata)) == n_steps
+
+
+def test_merge_sample_metadata_strict_passes_when_all_samples_match(adata):
+    sct.harmonise_obs(adata, {"orig.ident": "sample_id"})
+    table = pd.DataFrame({"sample_id": ["S0", "S1", "S2", "S3", "S9"], "tissue": list("abcde")})
+
+    sct.merge_sample_metadata(adata, table, strict=True)  # extra table rows are allowed
+
+    assert adata.obs["tissue"].notna().all()
+
+
 def test_merge_sample_metadata_rejects_duplicate_keys(adata):
     sct.harmonise_obs(adata, {"orig.ident": "sample_id"})
     table = pd.DataFrame({"sample_id": ["S0", "S0"], "tissue": ["a", "b"]})
