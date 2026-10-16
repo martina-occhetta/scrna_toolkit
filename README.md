@@ -214,9 +214,17 @@ class MyOvarianAtlas(sct.GEODataset):
         )
 
     def harmonise_metadata(self, adata):
-        info = pd.read_csv(self.directory / "GSE165897_cellInfo_HGSOC.tsv.gz", sep="\t", index_col=0)
-        adata.obs = adata.obs.join(info)  # dataset-specific quirk lives here, not in the package
-        return sct.harmonise_obs(adata, {"sample": "sample_id", "patient_id": "patient_id"})
+        # Dataset-specific quirk: cell metadata ships as a separate table keyed by barcode.
+        info_path = self.directory / "GSE165897_cellInfo_HGSOC.tsv.gz"
+        adata.obs = adata.obs.join(pd.read_csv(info_path, sep="\t", index_col="cell"))
+        return sct.harmonise_obs(
+            adata,
+            {
+                "sample": "sample_id",
+                "treatment_phase": "treatment_status",
+                "anatomical_location": "anatomical_site",
+            },
+        )
 
 
 adata = sct.get_dataset("my-ovarian-atlas").get()
