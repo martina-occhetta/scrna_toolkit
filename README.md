@@ -136,6 +136,22 @@ sct.summarize_by(adata, "cell_type")
 Counts for absent metadata columns are `NaN`, and `missing_metadata` lists the absent
 canonical fields.
 
+## Plotting
+
+```python
+sct.plot_qc_distributions(adata, groupby="sample_id")
+sct.plot_qc_scatter(adata)
+sct.plot_umap(adata, color=["patient_id", "cell_type"])
+sct.plot_cells_per_sample(adata)
+sct.plot_cell_type_composition(adata, groupby="patient_id")
+sct.plot_composition_heatmap(adata, path="figures/composition.png")
+```
+
+Every plot returns a matplotlib `Figure` and saves only when `path=` is given. If required
+metadata is absent, the plot is skipped with a logged warning and returns `None`, so it is
+safe to call in generic pipelines. Colours come from Scanpy's `uns["<col>_colors"]` when present,
+otherwise from the matplotlib defaults. Tick labels are hidden for more than 60 categories.
+
 ## Development
 
 ```bash
