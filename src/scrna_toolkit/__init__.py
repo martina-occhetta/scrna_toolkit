@@ -20,6 +20,7 @@ from scrna_toolkit.datasets import (
 from scrna_toolkit.io import (
     detect_format,
     download_census_h5ad,
+    download_file,
     download_geo_processed_files,
     get_geo_metadata,
     list_census_datasets,
@@ -74,6 +75,7 @@ __all__ = [
     "calculate_qc_metrics",
     "detect_format",
     "download_census_h5ad",
+    "download_file",
     "download_geo_processed_files",
     "ensure_raw_counts",
     "filter_cells",

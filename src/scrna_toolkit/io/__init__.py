@@ -6,7 +6,7 @@ from scrna_toolkit.io.census import (
     load_census,
     resolve_census_version,
 )
-from scrna_toolkit.io.download import DownloadError
+from scrna_toolkit.io.download import DownloadError, InvalidFileError, download_file
 from scrna_toolkit.io.geo import (
     GEOError,
     download_geo_processed_files,
@@ -20,8 +20,10 @@ __all__ = [
     "DownloadError",
     "FormatDetectionError",
     "GEOError",
+    "InvalidFileError",
     "detect_format",
     "download_census_h5ad",
+    "download_file",
     "download_geo_processed_files",
     "get_geo_metadata",
     "list_census_datasets",
