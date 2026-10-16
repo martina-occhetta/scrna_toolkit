@@ -67,11 +67,14 @@ def merge_sample_metadata(
     *,
     on: str = "sample_id",
     overwrite: bool = False,
+    strict: bool = False,
 ) -> AnnData:
     """Add sample-level columns (one row per sample) to every cell of that sample.
 
     ``metadata`` must contain ``on`` as a column with unique values. Cells whose sample is
-    absent from the table get missing values (reported, never imputed). Modifies in place.
+    absent from the table get missing values (reported, never imputed). With ``strict=True``
+    any such sample raises a ``ValueError`` instead, before ``adata`` is modified. Modifies in
+    place.
     """
     if on not in adata.obs:
         raise KeyError(f"Column {on!r} not in adata.obs; harmonise it first")
@@ -89,6 +92,10 @@ def merge_sample_metadata(
     keys = adata.obs[on].astype(str)
     table.index = table.index.astype(str)
     unmatched = sorted(set(keys) - set(table.index))
+    if unmatched and strict:
+        raise ValueError(
+            f"{len(unmatched)} samples in adata.obs[{on!r}] have no metadata row: {unmatched[:10]}"
+        )
     if unmatched:
         logger.warning("%d samples have no metadata row: %s", len(unmatched), unmatched[:10])
     for column in table.columns:
