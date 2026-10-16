@@ -18,3 +18,16 @@ jobs:
       - run: ruff format --check .
       - run: mypy
       - run: pytest
+
+  # The [census] extra pins a different dependency stack (tiledbsoma requires pandas<3),
+  # so the suite also runs with it installed.
+  test-census-extra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[test,census]" mypy
+      - run: mypy
+      - run: pytest
