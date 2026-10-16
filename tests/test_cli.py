@@ -111,3 +111,57 @@ def test_errors_give_nonzero_exit(tmp_path, caplog):
     assert "missing.h5ad" in caplog.text
     with pytest.raises(SystemExit):
         cli.main(["no-such-command"])
+
+
+def test_census_commands(monkeypatch, tmp_path, capsys, adata):
+    calls = {}
+
+    def fake_load_census(obs_value_filter, **kwargs):
+        calls["load"] = {"filter": obs_value_filter, **kwargs}
+        return adata
+
+    monkeypatch.setattr(cli, "load_census", fake_load_census)
+    monkeypatch.setattr(
+        cli,
+        "download_census_h5ad",
+        lambda dataset_id, out, **kw: calls.update(dataset=(dataset_id, kw)) or out / "x.h5ad",
+    )
+    output = tmp_path / "census" / "lung.h5ad"
+
+    args = [
+        "download-census",
+        "--filter",
+        "tissue == 'lung'",
+        "--output",
+        str(output),
+        "--census-version",
+        "2025-11-08",
+        "--obs-columns",
+        "cell_type,donor_id",
+        "--max-cells",
+        "0",
+    ]
+    assert cli.main(args) == 0
+    assert ad.read_h5ad(output).shape == adata.shape
+    assert calls["load"] == {
+        "filter": "tissue == 'lung'",
+        "organism": "Homo sapiens",
+        "census_version": "2025-11-08",
+        "var_value_filter": None,
+        "obs_column_names": ["cell_type", "donor_id"],
+        "max_cells": None,
+    }
+    assert cli.main(args) == 1  # refuses to overwrite
+    assert cli.main([*args, "--overwrite"]) == 0
+
+    assert cli.main(["download-census-dataset", "abc", "--output", str(tmp_path)]) == 0
+    assert calls["dataset"] == ("abc", {"census_version": "stable", "overwrite": False})
+
+
+def test_census_command_without_extra_fails_cleanly(monkeypatch, tmp_path, caplog):
+    import sys
+
+    monkeypatch.setitem(sys.modules, "cellxgene_census", None)
+    code = cli.main(["download-census", "--filter", "x", "--output", str(tmp_path / "o.h5ad")])
+    assert code == 1
+    assert "scrna-toolkit[census]" in caplog.text
