@@ -16,6 +16,7 @@ from Python, Jupyter, the command line and HPC batch jobs.
   with conservative format detection.
 - Fetches GEO series metadata, sample characteristics and processed supplementary files, with
   local caching.
+- Queries the CZ CELLxGENE Census (optional extra) for raw counts, with version pinning.
 - Harmonises `obs` metadata onto an optional canonical schema and reports metadata problems.
 - Calculates QC metrics and applies explicit, recorded threshold filters.
 - Runs a transparent Scanpy preprocessing pipeline that keeps raw counts safe and checks that
@@ -37,6 +38,7 @@ git clone https://github.com/martina-occhetta/scrna_toolkit.git
 cd scrna_toolkit
 pip install -e .          # library + CLI
 pip install -e ".[dev]"   # + pytest, ruff, mypy, jupyter
+pip install -e ".[census]"  # + CELLxGENE Census support (optional)
 ```
 
 Requires Python ≥ 3.10. Optional: `scikit-misc` for `hvg_flavor="seurat_v3"`.
@@ -126,6 +128,41 @@ re-fetch). Downloads include only processed supplementary files by default. `*_R
 archives (`kinds=["raw_archive"]`) and sequence files such as FASTQ/BAM (`kinds=["sequence"]`)
 must be requested explicitly, and reads stored in SRA are never downloaded. Network calls
 retry transient failures and raise `DownloadError`/`GEOError` with the URL involved.
+
+## CELLxGENE Census
+
+Optional, needs the extra: `pip install -e ".[census]"`.
+
+```python
+datasets = sct.list_census_datasets(census_version="2025-11-08")  # id, title, cell count, ...
+
+adata = sct.load_census(
+    "tissue_general == 'lung' and disease == 'normal' and is_primary_data == True",
+    census_version="2025-11-08",  # pin a build date for reproducibility
+    var_value_filter=None,  # e.g. "feature_name in ['CD3E', 'MS4A1']"
+    obs_column_names=["soma_joinid", "dataset_id", "donor_id", "cell_type", "tissue"],
+)
+
+# Or cache a query as data/raw/census/lung.h5ad, so later runs (e.g. on HPC) need no network:
+dataset = sct.CensusDataset("lung", "tissue_general == 'lung'", census_version="2025-11-08")
+adata = dataset.get()
+
+# Original submitted H5AD of one dataset:
+sct.download_census_h5ad("0895c838-e550-48a3-a777-dbcd35d30272", "data/raw/census")
+```
+
+- `load_census` returns Census **raw counts** in `X`. Cells are indexed by the Census-wide
+  `soma_joinid`, and genes by symbol with Ensembl IDs in `var["gene_ids"]`, like the other
+  loaders. Census columns `donor_id`, `cell_type` and `tissue` already use canonical names.
+- `"stable"`/`"latest"` are resolved to a concrete build date, which is used for the whole
+  query and recorded in provenance. Pin a date to get the same cells later.
+- Queries matching more than `max_cells` (default 1,000,000) are refused before any counts are
+  fetched. Filters without `is_primary_data == True` log a warning, because cells present in
+  several datasets would otherwise be duplicated.
+- Downloaded source H5ADs follow the CELLxGENE schema: `X` may be normalized with raw counts in
+  `adata.raw`. Check with `sct.ensure_raw_counts` before QC.
+- The extra pulls in `tiledbsoma`, which currently requires `pandas<3`. The package supports
+  both pandas 2 and 3, and CI tests both stacks.
 
 ## Metadata conventions
 
