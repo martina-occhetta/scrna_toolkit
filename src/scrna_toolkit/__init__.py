@@ -71,6 +71,7 @@ from scrna_toolkit.qc import (
     qc_report,
     qc_summary,
 )
+from scrna_toolkit.sampling import downsample_cells, stratified_sample
 from scrna_toolkit.summary import summarize_by, summarize_dataset
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -86,6 +87,7 @@ __all__ = [
     "dense_guard",
     "dense_guard_limit",
     "detect_format",
+    "downsample_cells",
     "download_census_h5ad",
     "download_file",
     "download_geo_processed_files",
@@ -132,6 +134,7 @@ __all__ = [
     "scale",
     "select_hvgs",
     "store_counts",
+    "stratified_sample",
     "summarize_by",
     "summarize_dataset",
     "validate_metadata",
