@@ -24,6 +24,7 @@ from scrna_toolkit.preprocessing import (
 )
 from scrna_toolkit.provenance import get_config, get_history, get_representation, record_step
 from scrna_toolkit.qc import calculate_qc_metrics, filter_cells, filter_genes
+from scrna_toolkit.summary import summarize_by, summarize_dataset
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -51,5 +52,7 @@ __all__ = [
     "scale",
     "select_hvgs",
     "store_counts",
+    "summarize_by",
+    "summarize_dataset",
     "validate_metadata",
 ]
