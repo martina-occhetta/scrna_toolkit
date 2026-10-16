@@ -246,7 +246,10 @@ values always fail.
 ### How raw counts are handled
 
 - **`adata.layers["counts"]`** holds the untouched raw count matrix. This is the canonical place
-  for counts, and `store_counts` writes it once before normalization.
+  for counts, and `store_counts` writes it once before normalization. An existing layer is
+  kept. If it shares memory with `X` (e.g. after `adata.layers["counts"] = adata.X`),
+  `store_counts` gives `X` its own copy and logs a warning, because normalization rewrites `X`
+  in place and would otherwise change the stored counts too.
 - **`adata.X`** starts as counts and is rewritten in place to normalized, then log1p values. It
   keeps all genes and stays sparse.
 - **`adata.raw`** is not used by this package. It is a frozen snapshot of a whole AnnData and is
