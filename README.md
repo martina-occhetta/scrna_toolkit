@@ -270,7 +270,8 @@ with a non-zero code. `python -m scrna_toolkit` works too.
 ## Development
 
 ```bash
-pytest
+pytest                 # unit tests: synthetic data, no network
+pytest -m integration  # live GEO tests (network)
 ruff check .
 ruff format --check .
 mypy
