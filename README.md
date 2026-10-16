@@ -249,6 +249,24 @@ adata = sct.get_dataset("my-ovarian-atlas").get()
 
 Adapters belong in project code. The package does not ship hard-coded biological datasets.
 
+## Command line
+
+```bash
+scrna-toolkit geo-info GSE165897 --samples
+scrna-toolkit download-geo GSE165897 --output data/raw/ --pattern "*counts*"
+scrna-toolkit preprocess --input data/raw/dataset.h5 --config preprocessing.yaml \
+    --output data/processed/dataset.h5ad --report-dir reports/qc
+scrna-toolkit summarize data/processed/dataset.h5ad --groupby patient_id
+scrna-toolkit qc-report data/processed/dataset.h5ad --output reports/qc
+```
+
+`preprocess` runs load → harmonise (`metadata` section) → QC metrics → cell/gene filtering
+(`qc` section) → `preprocess` (`preprocessing` section) and writes an h5ad that records both
+configs. Without `--config` the defaults are used, so pass your own thresholds. `summarize`
+opens h5ad files in backed mode (only `obs` is read). Delimited inputs need `--orientation`.
+Every command logs to stderr, `-v` enables debug logging with tracebacks, and failures exit
+with a non-zero code. `python -m scrna_toolkit` works too.
+
 ## Development
 
 ```bash
