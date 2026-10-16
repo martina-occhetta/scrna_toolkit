@@ -180,6 +180,50 @@ archives (`kinds=["raw_archive"]`) and sequence files such as FASTQ/BAM (`kinds=
 must be requested explicitly, and reads stored in SRA are never downloaded. Network calls
 retry transient failures and raise `DownloadError`/`GEOError` with the URL involved.
 
+## Datasets and adapters
+
+Most GEO series need no custom code:
+
+```python
+dataset = sct.get_dataset(
+    "GSE123456",
+    data_dir="data/raw",
+    patterns=["*filtered*"],  # which processed files to download
+    obs_mapping={"orig.ident": "sample_id"},
+)
+adata = dataset.get()  # download (existing files skipped) -> load -> harmonise
+```
+
+`GEODataset` loads the single count matrix in `data/raw/<accession>/`. Pass
+`matrix_file=` when there are several, and `load_kwargs=` for loader options. Write an adapter
+only for awkward datasets, for example when the matrix and cell metadata are in separate files:
+
+```python
+import pandas as pd
+import scrna_toolkit as sct
+
+
+@sct.register_dataset("my-ovarian-atlas")
+class MyOvarianAtlas(sct.GEODataset):
+    def __init__(self, data_dir="data/raw"):
+        super().__init__(
+            "GSE165897",
+            data_dir,
+            matrix_file="GSE165897_UMIcounts_HGSOC.tsv.gz",
+            load_kwargs={"orientation": "genes_x_cells"},
+        )
+
+    def harmonise_metadata(self, adata):
+        info = pd.read_csv(self.directory / "GSE165897_cellInfo_HGSOC.tsv.gz", sep="\t", index_col=0)
+        adata.obs = adata.obs.join(info)  # dataset-specific quirk lives here, not in the package
+        return sct.harmonise_obs(adata, {"sample": "sample_id", "patient_id": "patient_id"})
+
+
+adata = sct.get_dataset("my-ovarian-atlas").get()
+```
+
+Adapters belong in project code. The package does not ship hard-coded biological datasets.
+
 ## Development
 
 ```bash
