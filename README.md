@@ -152,6 +152,18 @@ metadata is absent, the plot is skipped with a logged warning and returns `None`
 safe to call in generic pipelines. Colours come from Scanpy's `uns["<col>_colors"]` when present,
 otherwise from the matplotlib defaults. Tick labels are hidden for more than 60 categories.
 
+## QC report
+
+```python
+report = sct.qc_report(adata, output_dir="reports/qc")  # output_dir is optional
+report.tables["qc_summary"]
+report.figures["qc_distributions"]
+```
+
+The report includes a dataset summary, metadata issues, QC metric quantiles, cells per
+sample/patient/cell type, and QC, composition and UMAP figures. Anything whose data is
+absent is skipped. With `output_dir`, tables are written as CSV and figures as PNG.
+
 ## Development
 
 ```bash

@@ -33,12 +33,20 @@ from scrna_toolkit.preprocessing import (
     store_counts,
 )
 from scrna_toolkit.provenance import get_config, get_history, get_representation, record_step
-from scrna_toolkit.qc import calculate_qc_metrics, filter_cells, filter_genes
+from scrna_toolkit.qc import (
+    QCReport,
+    calculate_qc_metrics,
+    filter_cells,
+    filter_genes,
+    qc_report,
+    qc_summary,
+)
 from scrna_toolkit.summary import summarize_by, summarize_dataset
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
+    "QCReport",
     "__version__",
     "calculate_qc_metrics",
     "detect_format",
@@ -62,6 +70,8 @@ __all__ = [
     "plot_qc_scatter",
     "plot_umap",
     "preprocess",
+    "qc_report",
+    "qc_summary",
     "record_step",
     "run_leiden",
     "run_neighbors",
