@@ -132,6 +132,41 @@ archives (`kinds=["raw_archive"]`) and sequence files such as FASTQ/BAM (`kinds=
 must be requested explicitly, and reads stored in SRA are never downloaded. Network calls
 retry transient failures and raise `DownloadError`/`GEOError` with the URL involved.
 
+### Downloading other files
+
+`sct.download_file` is the downloader used for GEO, and works for any URL (e.g. supplementary
+tables). It streams to `<name>.part` and resumes from it with an HTTP `Range` request, both
+after a dropped connection within a call and when called again after a failure. An existing
+file is skipped without a request by default. Pass any of the options below to validate it
+instead:
+
+```python
+from pathlib import Path
+
+import h5py
+
+
+def check_h5(path: Path) -> None:  # raise if the file is unusable
+    with h5py.File(path) as f:
+        f["X"]
+
+
+sct.download_file(
+    url,
+    "data/raw/matrix.h5",
+    user_agent="my-lab-pipeline/1.0",  # some servers reject the default User-Agent
+    manifest=True,  # record url/size/SHA-256 in data/raw/download_manifest.json
+    validator=check_h5,  # run after download and on an existing file
+    sha256=None,  # expected digest, if the publisher provides one
+    check_remote_size=False,  # HEAD request: compare an existing file with the server
+    verify_sha256=False,  # re-hash an existing file against the manifest (slow)
+)
+```
+
+A file that fails a check raises `sct.io.InvalidFileError` (a `DownloadError`). An existing file
+is never deleted: remove it yourself to download it again. A freshly downloaded file that fails
+`validator` or `sha256` is deleted. `overwrite=True` re-downloads from scratch.
+
 ## CELLxGENE Census
 
 Optional, needs the extra: `pip install -e ".[census]"`.
