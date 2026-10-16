@@ -267,6 +267,14 @@ opens h5ad files in backed mode (only `obs` is read). Delimited inputs need `--o
 Every command logs to stderr, `-v` enables debug logging with tracebacks, and failures exit
 with a non-zero code. `python -m scrna_toolkit` works too.
 
+## Examples
+
+- [`examples/basic_usage.ipynb`](examples/basic_usage.ipynb) walks through load → harmonise →
+  QC → filter → preserve counts → normalize → HVGs → PCA → neighbors → UMAP → summary on
+  synthetic data.
+- [`examples/example_config.yaml`](examples/example_config.yaml) is a commented config with
+  every key, for `scrna-toolkit preprocess --config`.
+
 ## Development
 
 ```bash
