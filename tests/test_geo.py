@@ -113,9 +113,9 @@ def test_download_defaults_to_processed_series_files(fake_geo, monkeypatch, tmp_
 
 
 class FakeResponse:
-    def __init__(self, status, body=b"", headers=None):
+    def __init__(self, status, body=b"", headers=None, encoding=None):
         self.status_code, self.body, self.headers = status, body, headers or {}
-        self.text = body.decode()
+        self.content, self.encoding = body, encoding
 
     def iter_content(self, chunk_size):
         yield self.body
@@ -154,3 +154,24 @@ def test_download_file_errors(monkeypatch, tmp_path):
     with pytest.raises(DownloadError, match="Incomplete"):
         download_file("https://example.org/x", tmp_path / "x")
     assert not (tmp_path / "x").exists()
+
+
+def test_fetch_text_decodes_utf8_without_charset(monkeypatch):
+    body = "treatment-naïve".encode()
+    monkeypatch.setattr(
+        download.requests,
+        "get",
+        lambda *a, **k: FakeResponse(200, body, {"Content-Type": "text/plain"}, "ISO-8859-1"),
+    )
+    assert download.fetch_text("https://example.org") == "treatment-naïve"
+    monkeypatch.setattr(
+        download.requests,
+        "get",
+        lambda *a, **k: FakeResponse(
+            200,
+            "naïve".encode("latin-1"),
+            {"Content-Type": "text/plain; charset=ISO-8859-1"},
+            "ISO-8859-1",
+        ),
+    )
+    assert download.fetch_text("https://example.org") == "naïve"

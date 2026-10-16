@@ -40,7 +40,11 @@ def _get(url: str, *, retries: int, timeout: float, **kwargs: Any) -> requests.R
 def fetch_text(
     url: str, *, params: dict[str, str] | None = None, timeout: float = 60, retries: int = 3
 ) -> str:
-    return _get(url, params=params, timeout=timeout, retries=retries).text
+    response = _get(url, params=params, timeout=timeout, retries=retries)
+    # NCBI serves text/plain without a charset, so requests would guess ISO-8859-1.
+    declared = "charset=" in response.headers.get("Content-Type", "")
+    encoding = response.encoding if declared and response.encoding else "utf-8"
+    return response.content.decode(encoding, errors="replace")
 
 
 def download_file(
