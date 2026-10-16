@@ -21,6 +21,7 @@ from Python, Jupyter, the command line and HPC batch jobs.
 - Calculates QC metrics and applies explicit, recorded threshold filters.
 - Runs a transparent Scanpy preprocessing pipeline that keeps raw counts safe and checks that
   inputs really are counts.
+- Draws donor-aware stratified subsets of large atlases, with weights that recover composition.
 - Produces exploratory plots, dataset summaries and a one-call QC report.
 - Records every step, its parameters and the package version in `adata.uns["scrna_toolkit"]`.
 
@@ -256,6 +257,32 @@ values always fail.
 
 Scaling densifies data, so `run_pca(scale=True)` scales only a temporary dense copy of the HVG
 columns and leaves `X` unchanged. A warning is logged when a dense block above ~0.8 GB is created.
+
+## Donor-aware downsampling
+
+For a laptop-sized development object from a large atlas, plain random sampling keeps the
+atlas's biases: a few donors with many cells dominate and rare cell types can disappear.
+`downsample_cells` splits the budget across donors first:
+
+```python
+dev = sct.downsample_cells(
+    adata,
+    50_000,
+    levels=("patient_id", "sample_id"),  # nested, outermost first; missing values raise
+    cell_type_key="cell_type",  # optional: proportional within each sample, with a floor
+    min_cells_per_type=25,
+    seed=0,
+)
+dev.obs["downsample_weight"]  # cells each selected cell represents in its stratum
+weights = sct.stratified_sample(adata.obs, 50_000)  # the same selection on obs only
+```
+
+At each level the budget is *water-filled*: groups smaller than an equal share are taken whole
+and the rest is split equally among the larger groups. Within the innermost group, cells are
+allocated across cell types in proportion to their size, with at least `min_cells_per_type`
+per type (or all of them, if fewer). Exactly `min(n_cells, n_obs)` cells are returned, in their
+original order. The weights sum to the original cell count, so weighted counts on the subset
+recover full-data composition. The selection depends only on the inputs and `seed`.
 
 ## Summaries
 
