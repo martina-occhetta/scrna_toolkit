@@ -8,7 +8,15 @@ try:
 except PackageNotFoundError:  # running from a source tree without installation
     __version__ = "0.0.0+unknown"
 
-from scrna_toolkit.io import detect_format, load_samples, load_scrna
+from scrna_toolkit.io import (
+    detect_format,
+    download_geo_processed_files,
+    get_geo_metadata,
+    list_geo_samples,
+    list_geo_supplementary_files,
+    load_samples,
+    load_scrna,
+)
 from scrna_toolkit.metadata import harmonise_obs, merge_sample_metadata, validate_metadata
 from scrna_toolkit.plotting import (
     plot_cell_type_composition,
@@ -50,12 +58,16 @@ __all__ = [
     "__version__",
     "calculate_qc_metrics",
     "detect_format",
+    "download_geo_processed_files",
     "filter_cells",
     "filter_genes",
     "get_config",
+    "get_geo_metadata",
     "get_history",
     "get_representation",
     "harmonise_obs",
+    "list_geo_samples",
+    "list_geo_supplementary_files",
     "load_samples",
     "load_scrna",
     "log1p",
