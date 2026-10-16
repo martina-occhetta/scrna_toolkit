@@ -47,3 +47,24 @@ def get_history(adata: AnnData) -> list[dict[str, Any]]:
         {"step": rec["step"], "timestamp": rec["timestamp"], "params": json.loads(rec["params"])}
         for _, rec in sorted(history.items())
     ]
+
+
+def record_config(adata: AnnData, name: str, config: dict[str, Any]) -> None:
+    """Store a configuration (e.g. ``"preprocessing"``) as ``uns[...]["<name>_config"]``."""
+    _store(adata)[f"{name}_config"] = _to_json(config)
+
+
+def get_config(adata: AnnData, name: str) -> dict[str, Any] | None:
+    """Return a configuration stored with :func:`record_config`, or ``None``."""
+    raw = adata.uns.get(UNS_KEY, {}).get(f"{name}_config")
+    return None if raw is None else json.loads(raw)
+
+
+def set_representation(adata: AnnData, representation: str) -> None:
+    """Record what ``adata.X`` currently holds: counts, normalized, log1p or scaled."""
+    _store(adata)["X_representation"] = representation
+
+
+def get_representation(adata: AnnData) -> str | None:
+    """Return what ``adata.X`` holds, or ``None`` if unknown (not set by this package)."""
+    return adata.uns.get(UNS_KEY, {}).get("X_representation")
