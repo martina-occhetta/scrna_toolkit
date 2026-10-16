@@ -12,8 +12,9 @@ from Python, Jupyter, the command line and HPC batch jobs.
 
 ## What it does
 
-- Loads `.h5ad`, 10x `.h5`, 10x MTX (gzipped or not, GEO-prefixed) and CSV/TSV count tables,
-  with conservative format detection.
+- Loads `.h5ad` (including legacy pre-0.7 AnnData HDF5), 10x `.h5`, 10x MTX (gzipped or not,
+  GEO-prefixed) and CSV/TSV count tables, with conservative format detection. Selected rows of
+  a matrix larger than memory can be streamed from disk.
 - Fetches GEO series metadata, sample characteristics and processed supplementary files, with
   local caching.
 - Queries the CZ CELLxGENE Census (optional extra) for raw counts, with version pinning.
@@ -117,6 +118,35 @@ conservative: ambiguous inputs raise `FormatDetectionError`. Delimited tables al
 explicit `orientation`, since it cannot be inferred reliably. Gene symbols become `var_names`
 and Ensembl IDs are kept in `var["gene_ids"]`.
 
+### `.h5` files and legacy AnnData
+
+A `.h5` file is opened (metadata only) to decide what it is: a Cell Ranger file (`10x_h5`), a
+current AnnData file saved with a `.h5` suffix (`h5ad`), or a **legacy AnnData** file written
+by anndata < 0.7 (`h5ad_legacy`: an `X` group with an `h5sparse_format` attribute and compound
+`obs`/`var` datasets). Current anndata cannot read the legacy layout, but GEO still hosts such
+files (e.g. `GSE180661_matrix.h5`). `load_scrna` reads them, decoding the integer-coded
+categoricals stored under `uns/<column>_categories`. Unrecognised `.h5` layouts raise
+`FormatDetectionError`.
+
+### Loading a subset of a large file
+
+`read_h5_rows` loads only selected rows of a CSR matrix in an AnnData HDF5 file (legacy or
+current), so a subset can be taken from a file larger than memory:
+
+```python
+from scrna_toolkit.io import h5_matrix_info
+
+h5_matrix_info("GSE180661_matrix.h5")  # layout, shape, nnz, dtypes; reads no matrix data
+obs, var = sct.read_h5_axes("GSE180661_matrix.h5")  # barcodes and genes only
+keep = obs.index.isin(annotated_barcodes)  # boolean mask, or integer row positions
+adata = sct.read_h5_rows("GSE180661_matrix.h5", keep, max_nnz_per_chunk=100_000_000)
+```
+
+The file is read in one sequential pass, in chunks of at most `max_nnz_per_chunk` stored
+entries. Peak memory is the output matrix (pre-allocated, `float32` values, `int32` indices
+when they fit) plus one chunk. Chunks containing no selected rows are not read. Rows come back
+in file order, so align other tables to `adata.obs_names`.
+
 ## GEO
 
 ```python
@@ -132,6 +162,41 @@ re-fetch). Downloads include only processed supplementary files by default. `*_R
 archives (`kinds=["raw_archive"]`) and sequence files such as FASTQ/BAM (`kinds=["sequence"]`)
 must be requested explicitly, and reads stored in SRA are never downloaded. Network calls
 retry transient failures and raise `DownloadError`/`GEOError` with the URL involved.
+
+### Downloading other files
+
+`sct.download_file` is the downloader used for GEO, and works for any URL (e.g. supplementary
+tables). It streams to `<name>.part` and resumes from it with an HTTP `Range` request, both
+after a dropped connection within a call and when called again after a failure. An existing
+file is skipped without a request by default. Pass any of the options below to validate it
+instead:
+
+```python
+from pathlib import Path
+
+import h5py
+
+
+def check_h5(path: Path) -> None:  # raise if the file is unusable
+    with h5py.File(path) as f:
+        f["X"]
+
+
+sct.download_file(
+    url,
+    "data/raw/matrix.h5",
+    user_agent="my-lab-pipeline/1.0",  # some servers reject the default User-Agent
+    manifest=True,  # record url/size/SHA-256 in data/raw/download_manifest.json
+    validator=check_h5,  # run after download and on an existing file
+    sha256=None,  # expected digest, if the publisher provides one
+    check_remote_size=False,  # HEAD request: compare an existing file with the server
+    verify_sha256=False,  # re-hash an existing file against the manifest (slow)
+)
+```
+
+A file that fails a check raises `sct.io.InvalidFileError` (a `DownloadError`). An existing file
+is never deleted: remove it yourself to download it again. A freshly downloaded file that fails
+`validator` or `sha256` is deleted. `overwrite=True` re-downloads from scratch.
 
 ## CELLxGENE Census
 
@@ -178,8 +243,13 @@ sct.download_census_h5ad("0895c838-e550-48a3-a777-dbcd35d30272", "data/raw/censu
 ```python
 sct.harmonise_obs(adata, {"orig.ident": "sample_id", "patient": "patient_id"})  # originals kept
 sct.merge_sample_metadata(adata, sample_table, on="sample_id")  # one row per sample
+sct.merge_sample_metadata(adata, sample_table, strict=True)  # raise if a sample has no row
 report = sct.validate_metadata(adata)  # DataFrame of issues; never raises
 ```
+
+By default, cells whose sample has no row in the table get missing values and a warning is
+logged. `strict=True` raises a `ValueError` listing the unmatched samples instead, before
+`adata` is changed. Rows in the table that match no cells are allowed either way.
 
 `validate_metadata` reports absent fields, duplicated cell IDs, missing/placeholder values,
 samples that map to several patients (or other sample-level fields), and near-duplicate labels
@@ -247,7 +317,10 @@ values always fail.
 ### How raw counts are handled
 
 - **`adata.layers["counts"]`** holds the untouched raw count matrix. This is the canonical place
-  for counts, and `store_counts` writes it once before normalization.
+  for counts, and `store_counts` writes it once before normalization. An existing layer is
+  kept. If it shares memory with `X` (e.g. after `adata.layers["counts"] = adata.X`),
+  `store_counts` gives `X` its own copy and logs a warning, because normalization rewrites `X`
+  in place and would otherwise change the stored counts too.
 - **`adata.X`** starts as counts and is rewritten in place to normalized, then log1p values. It
   keeps all genes and stays sparse.
 - **`adata.raw`** is not used by this package. It is a frozen snapshot of a whole AnnData and is
@@ -257,6 +330,24 @@ values always fail.
 
 Scaling densifies data, so `run_pca(scale=True)` scales only a temporary dense copy of the HVG
 columns and leaves `X` unchanged. A warning is logged when a dense block above ~0.8 GB is created.
+
+### Guarding against accidental densification
+
+The warning above only covers densification done by this package. On large objects, an opt-in
+guard makes any `.toarray()`/`.todense()` of a SciPy sparse matrix above a size limit raise
+`sct.DenseConversionError` (a `MemoryError`), whoever calls it:
+
+```python
+with sct.dense_guard(max_elements=5e8):  # default 5e8 elements, ~2 GB as float32
+    ...  # adata.X.toarray() on a 930k x 32k matrix now fails at once instead of exhausting RAM
+
+sct.install_dense_guard(1e9)  # or for the rest of the session, e.g. at the top of a notebook
+sct.remove_dense_guard()
+```
+
+Small dense blocks created inside scanpy/anndata stay below the limit and are unaffected. The
+guard patches SciPy's sparse classes, so it applies to the whole process (all threads). Nested
+`dense_guard` blocks restore the outer limit on exit.
 
 ## Summaries
 

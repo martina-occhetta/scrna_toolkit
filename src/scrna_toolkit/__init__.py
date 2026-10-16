@@ -20,6 +20,7 @@ from scrna_toolkit.datasets import (
 from scrna_toolkit.io import (
     detect_format,
     download_census_h5ad,
+    download_file,
     download_geo_processed_files,
     get_geo_metadata,
     list_census_datasets,
@@ -28,6 +29,15 @@ from scrna_toolkit.io import (
     load_census,
     load_samples,
     load_scrna,
+    read_h5_axes,
+    read_h5_rows,
+)
+from scrna_toolkit.memory import (
+    DenseConversionError,
+    dense_guard,
+    dense_guard_limit,
+    install_dense_guard,
+    remove_dense_guard,
 )
 from scrna_toolkit.metadata import harmonise_obs, merge_sample_metadata, validate_metadata
 from scrna_toolkit.plotting import (
@@ -69,13 +79,17 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 __all__ = [
     "CensusDataset",
     "DatasetAdapter",
+    "DenseConversionError",
     "GEODataset",
     "QCReport",
     "__version__",
     "calculate_qc_metrics",
+    "dense_guard",
+    "dense_guard_limit",
     "detect_format",
     "downsample_cells",
     "download_census_h5ad",
+    "download_file",
     "download_geo_processed_files",
     "ensure_raw_counts",
     "filter_cells",
@@ -86,6 +100,7 @@ __all__ = [
     "get_history",
     "get_representation",
     "harmonise_obs",
+    "install_dense_guard",
     "list_census_datasets",
     "list_datasets",
     "list_geo_samples",
@@ -107,8 +122,11 @@ __all__ = [
     "preprocess",
     "qc_report",
     "qc_summary",
+    "read_h5_axes",
+    "read_h5_rows",
     "record_step",
     "register_dataset",
+    "remove_dense_guard",
     "run_leiden",
     "run_neighbors",
     "run_pca",

@@ -16,13 +16,24 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import numpy as np
 import scanpy as sc
+import scipy.sparse as sp
 from anndata import AnnData
 
 from scrna_toolkit.counts import ensure_raw_counts
 from scrna_toolkit.provenance import get_representation, record_step, set_representation
 
 logger = logging.getLogger(__name__)
+
+
+def _shares_memory(a: Any, b: Any) -> bool:
+    """Whether two matrices share their value buffer (in-place edits to one change the other)."""
+    if sp.issparse(a) and sp.issparse(b):
+        return bool(np.shares_memory(a.data, b.data))
+    if sp.issparse(a) or sp.issparse(b):
+        return False
+    return bool(np.shares_memory(np.asarray(a), np.asarray(b)))
 
 
 def store_counts(
@@ -37,10 +48,22 @@ def store_counts(
     One copy of the matrix is unavoidable because normalization rewrites ``X``. If the layer
     already exists it is kept (no second copy) unless ``overwrite=True``. Either way the stored
     layer is verified with :func:`ensure_raw_counts`.
+
+    An existing layer that shares memory with ``X`` (e.g. after ``adata.layers["counts"] =
+    adata.X``) would be rewritten by the in-place normalization of ``X``. In that case ``X`` is
+    given its own copy so the stored counts stay untouched.
     """
     if layer in adata.layers and not overwrite:
         ensure_raw_counts(adata, layer, allow_non_integer=allow_non_integer)
-        logger.info("layers[%r] already exists; keeping it", layer)
+        X_existing: Any = adata.X
+        if _shares_memory(adata.layers[layer], X_existing):
+            logger.warning(
+                "layers[%r] shares memory with X; copying X so normalization cannot modify it",
+                layer,
+            )
+            adata.X = X_existing.copy()
+        else:
+            logger.info("layers[%r] already exists; keeping it", layer)
         return adata
     ensure_raw_counts(adata, allow_non_integer=allow_non_integer)
     X: Any = adata.X
