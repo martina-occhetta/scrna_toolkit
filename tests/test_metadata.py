@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
+from anndata import AnnData
 
 import scrna_toolkit as sct
 
@@ -315,3 +316,19 @@ def test_categorize_obs_respects_limit_and_columns(adata):
     assert isinstance(adata.obs["barcode"].dtype, pd.CategoricalDtype)
     with pytest.raises(KeyError, match="not_there"):
         sct.categorize_obs(adata, columns=["not_there"])
+
+
+def test_categorize_obs_default_limit_is_500():
+    obs = pd.DataFrame(
+        {
+            "id_500": [f"x{i % 500}" for i in range(1000)],
+            "id_501": [f"x{i % 501}" for i in range(1000)],
+        },
+        index=[f"cell{i}" for i in range(1000)],
+    )
+    adata = AnnData(obs=obs)
+
+    sct.categorize_obs(adata, columns=["id_500", "id_501"])
+
+    assert isinstance(adata.obs["id_500"].dtype, pd.CategoricalDtype)
+    assert not isinstance(adata.obs["id_501"].dtype, pd.CategoricalDtype)

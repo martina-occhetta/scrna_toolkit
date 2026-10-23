@@ -23,7 +23,7 @@ def _is_string_column(values: pd.Series) -> bool:
 def categorize_obs(
     adata: AnnData,
     *,
-    max_categories: int = 5000,
+    max_categories: int = 500,
     columns: Iterable[str] | None = None,
 ) -> AnnData:
     """Store string ``obs`` columns as categoricals (smaller files, faster ``groupby``).

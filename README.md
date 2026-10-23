@@ -298,7 +298,7 @@ the mapping is recorded in the provenance history.
 
 `categorize_obs` stores string columns as categoricals, which makes files smaller and
 `groupby` faster. A column is converted only if all its non-missing values are strings and it
-has at most `max_categories` distinct values (default 5000). This keeps barcode-like columns
+has at most `max_categories` distinct values (default 500). This keeps barcode-like columns
 as strings. Values are unchanged.
 
 ```python
