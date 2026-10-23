@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
+from anndata import AnnData
 
 import scrna_toolkit as sct
 
@@ -273,3 +274,61 @@ def test_map_values_refuses_overwrite_and_missing_column(adata):
     assert set(adata.obs["orig.ident"]) == {"ovary", "omentum", "ascites"}
     with pytest.raises(KeyError, match="not_there"):
         sct.map_values(adata, "not_there", SITE_MAP, "x")
+
+
+def test_categorize_obs_converts_string_columns_only(adata):
+    adata.obs["site"] = np.where(np.arange(adata.n_obs) % 2, "ovary", None)
+    adata.obs["mixed"] = pd.Series(
+        [1, "a"] * (adata.n_obs // 2), index=adata.obs_names, dtype=object
+    )
+    adata.obs["n_counts"] = np.arange(adata.n_obs)
+    adata.obs["flag"] = np.arange(adata.n_obs) % 2 == 0
+    before = adata.obs.copy()
+
+    out = sct.categorize_obs(adata)
+
+    assert out is adata
+    for column in ("orig.ident", "patient", "annotation", "site"):
+        assert isinstance(adata.obs[column].dtype, pd.CategoricalDtype), column
+        pd.testing.assert_series_equal(
+            adata.obs[column].astype(object), before[column].astype(object), check_dtype=False
+        )
+    assert adata.obs["site"].isna().sum() == before["site"].isna().sum()
+    assert adata.obs["mixed"].dtype == object
+    assert pd.api.types.is_integer_dtype(adata.obs["n_counts"])
+    assert pd.api.types.is_bool_dtype(adata.obs["flag"])
+    assert sct.get_history(adata)[-1]["params"]["converted"] == [
+        "orig.ident",
+        "patient",
+        "annotation",
+        "site",
+    ]
+
+
+def test_categorize_obs_respects_limit_and_columns(adata):
+    adata.obs["barcode"] = adata.obs_names.astype(str)
+
+    sct.categorize_obs(adata, max_categories=10)
+    assert not isinstance(adata.obs["barcode"].dtype, pd.CategoricalDtype)
+    assert sct.get_history(adata)[-1]["params"]["kept_as_strings"] == ["barcode"]
+
+    sct.categorize_obs(adata, columns=["barcode"])
+    assert isinstance(adata.obs["barcode"].dtype, pd.CategoricalDtype)
+    with pytest.raises(KeyError, match="not_there"):
+        sct.categorize_obs(adata, columns=["not_there"])
+
+
+def test_categorize_obs_default_limit_is_500():
+    obs = pd.DataFrame(
+        {
+            "id_500": [f"x{i % 500}" for i in range(1000)],
+            "id_501": [f"x{i % 501}" for i in range(1000)],
+        },
+        index=[f"cell{i}" for i in range(1000)],
+    )
+    adata = AnnData(obs=obs)
+
+    sct.categorize_obs(adata, columns=["id_500", "id_501"])
+
+    assert isinstance(adata.obs["id_500"].dtype, pd.CategoricalDtype)
+    assert not isinstance(adata.obs["id_501"].dtype, pd.CategoricalDtype)

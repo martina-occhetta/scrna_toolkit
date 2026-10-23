@@ -40,6 +40,7 @@ from scrna_toolkit.memory import (
     remove_dense_guard,
 )
 from scrna_toolkit.metadata import (
+    categorize_obs,
     harmonise_obs,
     infer_field_levels,
     map_values,
@@ -91,6 +92,7 @@ __all__ = [
     "QCReport",
     "__version__",
     "calculate_qc_metrics",
+    "categorize_obs",
     "dense_guard",
     "dense_guard_limit",
     "detect_format",
