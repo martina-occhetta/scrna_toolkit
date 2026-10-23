@@ -191,8 +191,12 @@ sct.download_file(
     sha256=None,  # expected digest, if the publisher provides one
     check_remote_size=False,  # HEAD request: compare an existing file with the server
     verify_sha256=False,  # re-hash an existing file against the manifest (slow)
+    offline=False,  # no network: a missing file raises FileNotFoundError
 )
 ```
+
+On a compute node without internet, `offline=True` runs only the local checks on files staged
+beforehand and skips `check_remote_size`.
 
 A file that fails a check raises `sct.io.InvalidFileError` (a `DownloadError`). An existing file
 is never deleted: remove it yourself to download it again. A freshly downloaded file that fails

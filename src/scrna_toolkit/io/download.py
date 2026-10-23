@@ -196,6 +196,7 @@ def download_file(
     manifest: bool | str | Path = False,
     verify_sha256: bool = False,
     check_remote_size: bool = False,
+    offline: bool = False,
 ) -> Path:
     """Stream ``url`` to ``dest`` via a ``.part`` file; skip or validate ``dest`` if it exists.
 
@@ -222,6 +223,9 @@ def download_file(
         files). Needs ``manifest``.
     check_remote_size
         Compare an existing file's size with the server's ``Content-Length`` (HEAD request).
+    offline
+        Make no network request: a missing ``dest`` raises :class:`FileNotFoundError` and
+        ``check_remote_size`` is skipped. Local checks still run on an existing file.
 
     Without any of ``validator``/``sha256``/``manifest``/``check_remote_size`` an existing
     file is skipped without a request, as before. Validation failures raise
@@ -238,6 +242,9 @@ def download_file(
     key = os.path.relpath(dest, manifest_path.parent) if manifest_path else dest.name
     record = dict(records.get(key, {}))
 
+    if offline and (overwrite or not dest.exists()):
+        raise FileNotFoundError(f"{dest} is missing (or overwrite=True) and offline=True")
+
     if dest.exists() and not overwrite:
         size = dest.stat().st_size
         if record.get("size") not in (None, size):
@@ -245,7 +252,7 @@ def download_file(
                 f"{dest} is {size} bytes but the manifest recorded {record['size']}; "
                 "delete it to download again"
             )
-        if check_remote_size:
+        if check_remote_size and not offline:
             remote = remote_size(url, timeout=timeout, headers=headers)
             if remote is not None and remote != size:
                 raise InvalidFileError(
