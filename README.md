@@ -259,6 +259,19 @@ logged. `strict=True` raises a `ValueError` listing the unmatched samples instea
 samples that map to several patients (or other sample-level fields), and near-duplicate labels
 such as `"T cell"` vs `"t_cell"`.
 
+`infer_field_levels` reports, for every `obs` column, the coarsest unit within which it takes
+a single value. It is computed from the data, not from the schema:
+
+```python
+sct.infer_field_levels(adata, levels=("patient_id", "sample_id", "library_id"))
+# patient_id -> "patient_id", subtype -> "patient_id", site -> "sample_id",
+# sort_fraction -> "library_id", cell_type -> "cell", dataset -> "constant"
+```
+
+Levels are listed coarsest first, and absent ones are skipped. Missing values count as a
+value, and cells with a missing level key form a group of their own, so a column is never
+placed at a level by ignoring cells.
+
 ## Quality control
 
 ```python

@@ -39,7 +39,12 @@ from scrna_toolkit.memory import (
     install_dense_guard,
     remove_dense_guard,
 )
-from scrna_toolkit.metadata import harmonise_obs, merge_sample_metadata, validate_metadata
+from scrna_toolkit.metadata import (
+    harmonise_obs,
+    infer_field_levels,
+    merge_sample_metadata,
+    validate_metadata,
+)
 from scrna_toolkit.plotting import (
     plot_cell_type_composition,
     plot_cells_per_group,
@@ -100,6 +105,7 @@ __all__ = [
     "get_history",
     "get_representation",
     "harmonise_obs",
+    "infer_field_levels",
     "install_dense_guard",
     "list_census_datasets",
     "list_datasets",

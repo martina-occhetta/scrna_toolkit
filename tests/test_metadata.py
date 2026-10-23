@@ -107,3 +107,71 @@ def test_validate_without_any_metadata_does_not_fail(adata):
     adata.obs = adata.obs.iloc[:, :0]
     report = sct.validate_metadata(adata)
     assert (report["check"] == "missing_field").all()
+
+
+def _levelled_obs() -> pd.DataFrame:
+    # Two patients, two samples each, three cells per sample.
+    sample = [f"S{i // 3}" for i in range(12)]
+    patient = [f"P{i // 6}" for i in range(12)]
+    return pd.DataFrame(
+        {
+            "patient_id": patient,
+            "sample_id": sample,
+            "dataset": "D1",
+            "subtype": ["HRD" if p == "P0" else "FBI" for p in patient],
+            "site": [
+                {"S0": "ovary", "S1": "omentum", "S2": "ovary", "S3": "ascites"}[s] for s in sample
+            ],
+            "cell_type": ["T", "B", "Myeloid"] * 4,
+            "n_counts": np.arange(12.0),
+        },
+        index=[f"cell{i}" for i in range(12)],
+    )
+
+
+def test_infer_field_levels_returns_coarsest_constant_level():
+    levels = sct.infer_field_levels(_levelled_obs())
+
+    assert levels.to_dict() == {
+        "patient_id": "patient_id",
+        "sample_id": "sample_id",
+        "dataset": "constant",
+        "subtype": "patient_id",
+        "site": "sample_id",
+        "cell_type": "cell",
+        "n_counts": "cell",
+    }
+
+
+def test_infer_field_levels_accepts_adata_columns_and_extra_levels(adata):
+    sct.harmonise_obs(adata, {"orig.ident": "sample_id", "patient": "patient_id"})
+    # Every sample (cells i % 4) holds two libraries, each from one sort fraction.
+    fraction = (np.arange(adata.n_obs) // 4) % 2
+    adata.obs["library_id"] = adata.obs["sample_id"].astype(str) + "_L" + fraction.astype(str)
+    adata.obs["sort"] = np.where(fraction, "CD45+", "CD45-")
+
+    levels = sct.infer_field_levels(
+        adata, levels=("patient_id", "sample_id", "library_id"), columns=["sort", "orig.ident"]
+    )
+
+    assert levels.to_dict() == {"sort": "library_id", "orig.ident": "sample_id"}
+
+
+def test_infer_field_levels_counts_missing_values_and_keys():
+    obs = _levelled_obs()
+    obs.loc["cell0", "subtype"] = np.nan  # sample S0 now has two values (NaN, HRD)
+    assert sct.infer_field_levels(obs, columns=["subtype"])["subtype"] == "cell"
+    obs.loc[obs["sample_id"] == "S0", "subtype"] = np.nan  # S0 missing, S1 HRD: same patient
+    assert sct.infer_field_levels(obs, columns=["subtype"])["subtype"] == "sample_id"
+
+    obs = _levelled_obs()
+    obs.loc[["cell0", "cell6"], "patient_id"] = np.nan  # cells from two patients share a NaN key
+    assert sct.infer_field_levels(obs, columns=["subtype"])["subtype"] == "sample_id"
+
+
+def test_infer_field_levels_skips_absent_levels_and_rejects_absent_columns():
+    obs = _levelled_obs().drop(columns="patient_id")
+    assert sct.infer_field_levels(obs, columns=["subtype"])["subtype"] == "sample_id"
+    assert sct.infer_field_levels(obs, levels=("donor",), columns=["subtype"])["subtype"] == "cell"
+    with pytest.raises(KeyError, match="not_there"):
+        sct.infer_field_levels(obs, columns=["not_there"])
