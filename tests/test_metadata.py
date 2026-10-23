@@ -212,3 +212,64 @@ def test_metadata_audit_table_columns_examples_and_descriptions(adata):
     assert len(table.loc["annotation", "examples"].split(", ")) == 2
     assert table.loc["flag", "examples"] == "False, True"  # booleans are not ranges
     assert table.loc["empty", ["n_unique", "n_missing", "examples"]].tolist() == [0, 120, ""]
+
+
+SITE_MAP = {"S0": "ovary", "S1": "omentum", "S2": "ovary", "S3": "ascites"}
+
+
+def test_map_values_writes_target_and_records_provenance(adata):
+    out = sct.map_values(adata, "orig.ident", SITE_MAP, "anatomical_site")
+
+    assert out is adata
+    expected = adata.obs["orig.ident"].map(SITE_MAP)
+    assert (adata.obs["anatomical_site"] == expected).all()
+    assert "orig.ident" in adata.obs
+    step = sct.get_history(adata)[-1]
+    assert step["step"] == "map_values"
+    assert step["params"] == {
+        "column": "orig.ident",
+        "target": "anatomical_site",
+        "mapping": SITE_MAP,
+        "unmapped": [],
+    }
+
+
+def test_map_values_strict_raises_on_unmapped_without_modifying(adata):
+    n_steps = len(sct.get_history(adata))
+    with pytest.raises(ValueError, match=r"1 values of 'orig.ident' .* \['S3'\]"):
+        sct.map_values(adata, "orig.ident", {"S0": "a", "S1": "b", "S2": "c"}, "site")
+    assert "site" not in adata.obs
+    assert len(sct.get_history(adata)) == n_steps
+
+
+def test_map_values_non_strict_leaves_unmapped_missing(adata):
+    sct.map_values(adata, "orig.ident", {"S0": "a", "S1": "b", "S2": "c"}, "site", strict=False)
+
+    s3 = adata.obs["orig.ident"] == "S3"
+    assert adata.obs.loc[s3, "site"].isna().all()
+    assert adata.obs.loc[~s3, "site"].notna().all()
+    assert sct.get_history(adata)[-1]["params"]["unmapped"] == ["S3"]
+
+
+def test_map_values_keeps_missing_and_categorical_dtype(adata):
+    adata.obs["sort"] = pd.Categorical(
+        np.where(np.arange(adata.n_obs) % 2, "singlet, live, CD45+", "singlet, live, CD45-")
+    )
+    adata.obs.loc[adata.obs_names[:3], "sort"] = np.nan
+    mapping = {"singlet, live, CD45+": "CD45+", "singlet, live, CD45-": "CD45-"}
+
+    sct.map_values(adata, "sort", mapping, "sort_fraction")
+
+    assert isinstance(adata.obs["sort_fraction"].dtype, pd.CategoricalDtype)
+    assert adata.obs["sort_fraction"].isna().sum() == 3
+    assert set(adata.obs["sort_fraction"].dropna()) == {"CD45+", "CD45-"}
+
+
+def test_map_values_refuses_overwrite_and_missing_column(adata):
+    sct.map_values(adata, "orig.ident", SITE_MAP, "site")
+    with pytest.raises(ValueError, match="already exists"):
+        sct.map_values(adata, "orig.ident", SITE_MAP, "site")
+    sct.map_values(adata, "orig.ident", SITE_MAP, "orig.ident", overwrite=True)  # in place
+    assert set(adata.obs["orig.ident"]) == {"ovary", "omentum", "ascites"}
+    with pytest.raises(KeyError, match="not_there"):
+        sct.map_values(adata, "not_there", SITE_MAP, "x")
