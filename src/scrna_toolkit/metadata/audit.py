@@ -1,8 +1,8 @@
-"""Describe ``obs`` metadata without modifying it: the level at which each column is defined."""
+"""Describe ``obs`` metadata without modifying it: column levels and per-column summaries."""
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import cast
 
 import pandas as pd
@@ -62,3 +62,46 @@ def infer_field_levels(
         result[list(single)] = key
         undecided = [c for c in undecided if c not in single]
     return result
+
+
+def _examples(values: pd.Series, n_examples: int) -> str:
+    present = values.dropna()
+    if present.empty:
+        return ""
+    if pd.api.types.is_numeric_dtype(present) and not pd.api.types.is_bool_dtype(present):
+        return f"range {present.min():.3g} – {present.max():.3g}"
+    return ", ".join(present.astype(str).value_counts().head(n_examples).index)
+
+
+def metadata_audit_table(
+    data: AnnData | pd.DataFrame,
+    columns: Iterable[str] | None = None,
+    *,
+    levels: Sequence[str] = DEFAULT_LEVELS,
+    descriptions: Mapping[str, str] | None = None,
+    n_examples: int = 4,
+) -> pd.DataFrame:
+    """One row per ``obs`` column: level, dtype, unique and missing counts, example values.
+
+    ``level`` comes from :func:`infer_field_levels` with ``levels``. Examples are the
+    ``n_examples`` most frequent values, or the range for numeric columns. With
+    ``descriptions`` (``{column: text}``), a ``description`` column is added (empty where a
+    column is not described). Only ``NaN``/``None`` count as missing; placeholder strings such
+    as ``"NA"`` are reported by :func:`validate_metadata`.
+    """
+    obs = _obs(data)
+    cols = list(obs.columns if columns is None else columns)
+    field_levels = infer_field_levels(obs, levels=levels, columns=cols)
+    table = pd.DataFrame(
+        {
+            "column": cols,
+            "level": field_levels.to_numpy(),
+            "dtype": [str(obs[c].dtype) for c in cols],
+            "n_unique": [int(obs[c].nunique(dropna=True)) for c in cols],
+            "n_missing": [int(obs[c].isna().sum()) for c in cols],
+            "examples": [_examples(obs[c], n_examples) for c in cols],
+        }
+    )
+    if descriptions is not None:
+        table["description"] = [descriptions.get(c, "") for c in cols]
+    return table

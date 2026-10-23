@@ -175,3 +175,40 @@ def test_infer_field_levels_skips_absent_levels_and_rejects_absent_columns():
     assert sct.infer_field_levels(obs, levels=("donor",), columns=["subtype"])["subtype"] == "cell"
     with pytest.raises(KeyError, match="not_there"):
         sct.infer_field_levels(obs, columns=["not_there"])
+
+
+def test_metadata_audit_table_summarises_each_column():
+    obs = _levelled_obs()
+    obs.loc["cell0", "cell_type"] = np.nan
+    obs.loc["cell2", "cell_type"] = "B"  # B 5, T 3, Myeloid 3
+    obs.loc["cell1", "n_counts"] = np.nan
+
+    table = sct.metadata_audit_table(obs).set_index("column")
+
+    assert list(table.columns) == ["level", "dtype", "n_unique", "n_missing", "examples"]
+    assert table.loc["subtype", "level"] == "patient_id"
+    assert table.loc["cell_type", "level"] == "cell"
+    assert table.loc["cell_type", ["n_unique", "n_missing"]].tolist() == [3, 1]
+    assert table.loc["cell_type", "examples"].split(", ")[0] == "B"  # most frequent first
+    assert table.loc["n_counts", "examples"] == "range 0 – 11"
+    assert table.loc["n_counts", "n_missing"] == 1
+    assert table.loc["dataset", ["level", "n_unique", "examples"]].tolist() == ["constant", 1, "D1"]
+
+
+def test_metadata_audit_table_columns_examples_and_descriptions(adata):
+    adata.obs["flag"] = np.arange(adata.n_obs) % 3 == 0
+    adata.obs["empty"] = np.nan
+
+    table = sct.metadata_audit_table(
+        adata,
+        columns=["annotation", "flag", "empty"],
+        levels=("patient",),
+        descriptions={"annotation": "author cell type"},
+        n_examples=2,
+    ).set_index("column")
+
+    assert table.index.tolist() == ["annotation", "flag", "empty"]
+    assert table["description"].tolist() == ["author cell type", "", ""]
+    assert len(table.loc["annotation", "examples"].split(", ")) == 2
+    assert table.loc["flag", "examples"] == "False, True"  # booleans are not ranges
+    assert table.loc["empty", ["n_unique", "n_missing", "examples"]].tolist() == [0, 120, ""]

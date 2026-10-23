@@ -272,6 +272,18 @@ Levels are listed coarsest first, and absent ones are skipped. Missing values co
 value, and cells with a missing level key form a group of their own, so a column is never
 placed at a level by ignoring cells.
 
+`metadata_audit_table` gives one row per column: inferred level, dtype, number of unique and
+missing values, and the most frequent values (or the range, for numeric columns). Pass a
+`{column: description}` mapping to add a `description` column:
+
+```python
+sct.metadata_audit_table(
+    adata,
+    levels=("patient_id", "sample_id"),
+    descriptions={"subtype": "mutational subtype (paper Table S3)"},
+)
+```
+
 ## Quality control
 
 ```python

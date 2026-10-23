@@ -43,6 +43,7 @@ from scrna_toolkit.metadata import (
     harmonise_obs,
     infer_field_levels,
     merge_sample_metadata,
+    metadata_audit_table,
     validate_metadata,
 )
 from scrna_toolkit.plotting import (
@@ -116,6 +117,7 @@ __all__ = [
     "load_scrna",
     "log1p",
     "merge_sample_metadata",
+    "metadata_audit_table",
     "normalize_total",
     "plot_cell_type_composition",
     "plot_cells_per_group",
