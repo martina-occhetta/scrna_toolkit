@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from collections import Counter
 from collections.abc import Mapping
+from typing import Any
 
 import pandas as pd
 from anndata import AnnData
@@ -105,5 +106,58 @@ def merge_sample_metadata(
         adata,
         "merge_sample_metadata",
         {"on": on, "columns": list(table.columns), "unmatched_samples": unmatched},
+    )
+    return adata
+
+
+def map_values(
+    adata: AnnData,
+    column: str,
+    mapping: Mapping[Any, Any],
+    target: str,
+    *,
+    strict: bool = True,
+    overwrite: bool = False,
+) -> AnnData:
+    """Write ``mapping`` applied to ``obs[column]`` into ``obs[target]``.
+
+    Every non-missing value must be a key of ``mapping``: an unmapped value raises a
+    ``ValueError`` listing them, before ``adata`` is modified. With ``strict=False``, cells with
+    an unmapped value get a missing value instead and a warning is logged. Missing values stay
+    missing. The source column is kept, and a categorical source gives a categorical target.
+    Modifies ``adata.obs`` in place and returns ``adata``.
+    """
+    if column not in adata.obs:
+        raise KeyError(f"Column {column!r} not in adata.obs")
+    if target in adata.obs and not overwrite:
+        raise ValueError(f"Target column {target!r} already exists; pass overwrite=True")
+
+    source = adata.obs[column]
+    values = source.astype(object)
+    known = values.isin(list(mapping.keys()))
+    unmapped = values[values.notna() & ~known].unique().tolist()
+    if unmapped and strict:
+        raise ValueError(
+            f"{len(unmapped)} values of {column!r} are not in the mapping: {unmapped[:10]}"
+        )
+    if unmapped:
+        logger.warning(
+            "%d values of %r are not in the mapping: %s", len(unmapped), column, unmapped
+        )
+
+    result = values.map(mapping).where(known)
+    if isinstance(source.dtype, pd.CategoricalDtype):
+        result = result.astype("category")
+    adata.obs[target] = result
+
+    record_step(
+        adata,
+        "map_values",
+        {
+            "column": column,
+            "target": target,
+            "mapping": {str(k): v for k, v in mapping.items()},
+            "unmapped": unmapped,
+        },
     )
     return adata

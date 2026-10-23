@@ -284,6 +284,18 @@ sct.metadata_audit_table(
 )
 ```
 
+`map_values` recodes one column into another through an explicit mapping, for example to
+derive a canonical field from author labels:
+
+```python
+sct.map_values(adata, "sort_parameters", {"singlet, live, CD45+": "CD45+", ...}, "sort_fraction")
+```
+
+By default every non-missing value must be a key of the mapping. Unmapped values raise a
+`ValueError` that lists them, before `adata` is changed. With `strict=False` they become missing
+values and a warning is logged. Missing values stay missing, the source column is kept, and
+the mapping is recorded in the provenance history.
+
 ## Quality control
 
 ```python

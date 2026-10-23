@@ -42,6 +42,7 @@ from scrna_toolkit.memory import (
 from scrna_toolkit.metadata import (
     harmonise_obs,
     infer_field_levels,
+    map_values,
     merge_sample_metadata,
     metadata_audit_table,
     validate_metadata,
@@ -116,6 +117,7 @@ __all__ = [
     "load_samples",
     "load_scrna",
     "log1p",
+    "map_values",
     "merge_sample_metadata",
     "metadata_audit_table",
     "normalize_total",
