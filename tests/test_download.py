@@ -209,3 +209,34 @@ def test_check_remote_size(server, tmp_path):
 def test_verify_sha256_needs_manifest(tmp_path):
     with pytest.raises(ValueError, match="manifest"):
         download_file(URL, tmp_path / "x", verify_sha256=True)
+
+
+def test_offline_raises_for_missing_file_without_a_request(server, tmp_path):
+    dest = tmp_path / "data.bin"
+    with pytest.raises(FileNotFoundError, match="offline"):
+        download_file(URL, dest, offline=True)
+    assert server.requests == [] and not dest.exists()
+
+
+def test_offline_validates_existing_file_without_a_request(server, tmp_path):
+    dest = tmp_path / "data.bin"
+    download_file(URL, dest, manifest=True)
+    server.requests.clear()
+    seen = []
+
+    download_file(
+        URL, dest, manifest=True, check_remote_size=True, validator=seen.append, offline=True
+    )
+
+    assert seen == [dest] and server.requests == []
+    dest.write_bytes(BODY[:10])
+    with pytest.raises(InvalidFileError, match="manifest recorded"):
+        download_file(URL, dest, manifest=True, offline=True)
+
+
+def test_offline_refuses_overwrite(server, tmp_path):
+    dest = tmp_path / "data.bin"
+    dest.write_bytes(BODY)
+    with pytest.raises(FileNotFoundError, match="offline"):
+        download_file(URL, dest, overwrite=True, offline=True)
+    assert dest.read_bytes() == BODY and server.requests == []
